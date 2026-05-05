@@ -1,0 +1,21 @@
+# Виртуальное окружение
+venv/
+
+# Медиафайлы и статика
+media/
+staticfiles/
+
+# Файл с секретами
+.env
+
+# Файлы Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+
+# Файлы базы данных
+*.sqlite3

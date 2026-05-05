@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>РетроФото Ярославль</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #map { height: 100vh; width: 100%; z-index: 1; }
+
+        /* Стили для умного поиска */
+        .osm-search-container {
+            position: absolute;
+            top: 10px;
+            left: 60px; 
+            z-index: 1000;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+            display: flex;
+            align-items: center;
+            width: 400px;
+            max-width: calc(100% - 80px);
+        }
+        .osm-search-input {
+            border: none;
+            padding: 10px;
+            width: 100%;
+            outline: none;
+            font-size: 16px;
+            border-radius: 4px 0 0 4px;
+        }
+        .osm-search-btn {
+            background: white;
+            border: none;
+            border-left: 1px solid #ccc;
+            padding: 0 12px;
+            cursor: pointer;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0 4px 4px 0;
+        }
+        .osm-search-btn:hover { background: #f4f4f4; }
+        
+        /* Выпадающий список результатов */
+        .osm-search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 0 0 4px 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        .osm-result-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .osm-result-item:last-child { border-bottom: none; }
+        .osm-result-item:hover { background-color: #f0f0f0; }
+        .osm-result-type {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            margin-right: 5px;
+        }
+
+        /* Остальные стили без изменений */
+        .auth-container {
+            position: fixed; top: 20px; right: 20px; z-index: 2000;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .btn-login {
+            background: white; border: none; border-radius: 30px;
+            padding: 10px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            font-size: 15px; font-weight: 500; cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s; color: #333;
+        }
+        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+        .user-info {
+            display: flex; align-items: center; gap: 10px;
+            background: white; border-radius: 30px;
+            padding: 6px 14px 6px 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .user-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: #007bff; color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 16px;
+        }
+        .user-name {
+            font-weight: 500; color: #333; max-width: 120px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 15px; cursor: pointer;
+            border-bottom: 2px dashed transparent; transition: border-color 0.2s;
+            background: none; border: none; padding: 0; font-family: inherit;
+        }
+        .user-name:hover { border-bottom: 2px dashed #007bff; color: #007bff; }
+        .btn-logout {
+            background: none; border: none; cursor: pointer; font-size: 18px;
+            padding: 4px; border-radius: 50%; transition: background 0.2s;
+            display: flex; align-items: center; justify-content: center; color: #666;
+        }
+        .btn-logout:hover { background: #f0f0f0; color: #ff4444; }
+
+        /* Боковая панель */
+        .sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            width: 360px;
+            height: 100vh;
+            background: white;
+            box-shadow: 2px 0 15px rgba(0,0,0,0.15);
+            z-index: 2500;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            transform: translateX(0);
+        }
+        .sidebar.hidden {
+            transform: translateX(-360px);
+        }
+        .sidebar-toggle {
+            position: absolute;
+            top: 20px;
+            right: -40px;
+            width: 36px;
+            height: 36px;
+            background: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2501;
+            color: #333;
+        }
+        .sidebar-content {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .sidebar-search {
+            position: relative;
+        }
+        .sidebar-search .search-input-wrapper {
+            display: flex; align-items: center; background: #f5f5f5;
+            border-radius: 30px; padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            transition: border-color 0.2s;
+        }
+        .sidebar-search .search-input-wrapper:focus-within {
+            border-color: #007bff;
+        }
+        .sidebar-search .search-icon {
+            font-size: 16px; margin-right: 8px; color: #666;
+        }
+        .sidebar-search .search-input {
+            border: none; outline: none; font-size: 14px; width: 100%;
+            background: transparent;
+        }
+        .sidebar-search .search-results {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0; right: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 2600;
+            margin-top: 5px;
+        }
+        .sidebar-search .search-results.show {
+            display: block;
+        }
+        .sidebar-search .search-result-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 1px solid #eee;
+        }
+        .sidebar-search .search-result-item:hover {
+            background: #f5f8ff;
+        }
+        .sidebar-search .search-no-results {
+            padding: 12px 15px;
+            color: #888;
+            font-style: italic;
+        }
+
+        .photos-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .photo-card {
+            background: #fafafa;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .photo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .photo-card img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+        }
+        .photo-card-info {
+            padding: 8px 12px;
+        }
+        .photo-card-year {
+            font-weight: 600;
+            color: #007bff;
+        }
+        .photo-card-desc {
+            font-size: 13px;
+            color: #555;
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .no-photos {
+            text-align: center;
+            color: #888;
+            margin-top: 30px;
+        }
+
+        /* Модальные окна */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px); z-index: 3000;
+            justify-content: center; align-items: center;
+        }
+        .modal-box {
+            background: white; padding: 30px; border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3); position: relative;
+            animation: fadeIn 0.3s ease; max-width: 90vw;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-box h3 { margin-top: 0; color: #222; font-weight: 600; font-size: 22px; text-align: center; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #444; font-size: 14px; }
+        .form-group input, .form-group textarea {
+            width: 100%; padding: 12px 15px; border: 2px solid #e0e0e0;
+            border-radius: 12px; font-size: 15px; transition: border-color 0.2s;
+            box-sizing: border-box; font-family: inherit;
+        }
+        .form-group input:focus, .form-group textarea:focus { border-color: #007bff; outline: none; }
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+        .btn {
+            padding: 12px 20px; border-radius: 12px; border: none;
+            font-size: 15px; font-weight: 500; cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .btn:hover { transform: scale(1.02); }
+        .btn-primary { background: #007bff; color: white; flex: 1; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-secondary { background: #f0f0f0; color: #333; }
+        .btn-danger { background: #ff4444; color: white; }
+        .btn-danger:hover { background: #cc0000; }
+
+        .auth-tab {
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+            background: #f0f0f0;
+            color: #333;
+            border: none;
+            transition: background 0.2s;
+        }
+        .auth-tab.active {
+            background: #007bff;
+            color: white;
+        }
+
+        .popup-content { min-width: 220px; text-align: center; font-size: 14px; }
+        .popup-img { max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 5px; display: block; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-add, .btn-compare {
+            display: inline-block; padding: 8px 14px; color: white;
+            text-decoration: none; border-radius: 6px; cursor: pointer;
+            margin-top: 8px; font-size: 13px; transition: background 0.2s; border: none;
+        }
+        .btn-add { background: #007bff; }
+        .btn-add:hover { background: #0056b3; }
+        .btn-compare { background: #28a745; margin-left: 5px; }
+        .btn-compare:hover { background: #1e7e34; }
+
+        .popup-gallery { max-height: 230px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+        .popup-gallery-item { border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .popup-year { font-weight: bold; font-size: 13px; color: #333; margin-top: 3px; }
+        .popup-desc { font-size: 12px; color: #555; margin-top: 2px; }
+
+        .error-message { color: #ff4444; font-size: 13px; margin-top: 5px; display: none; }
+
+        .compare-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); z-index: 4000;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        .compare-container {
+            position: relative; width: 80vw; height: 70vh; max-width: 900px;
+            max-height: 600px; border-radius: 16px; overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #333;
+        }
+        .compare-container img {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; user-select: none; -webkit-user-drag: none;
+        }
+        .compare-before { clip-path: inset(0 50% 0 0); }
+        .compare-after { clip-path: inset(0 0 0 50%); }
+        .compare-slider {
+            position: absolute; top: 0; bottom: 0; width: 4px;
+            background: white; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            left: 50%; transform: translateX(-50%); cursor: ew-resize; z-index: 10;
+        }
+        .compare-slider::before {
+            content: '◀ ▶'; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: white;
+            padding: 6px 10px; border-radius: 20px; font-size: 14px;
+            font-weight: bold; color: #333; white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .compare-close {
+            position: absolute; top: 20px; right: 20px; background: white;
+            border: none; border-radius: 50%; width: 40px; height: 40px;
+            font-size: 24px; cursor: pointer; z-index: 20;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .compare-info { color: white; margin-top: 10px; font-size: 14px; text-align: center; }
+        .compare-year { display: inline-block; margin: 0 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Умная поисковая строка -->
+<div class="osm-search-container">
+    <input type="text" class="osm-search-input" id="osmSearchInput" placeholder="Поиск (Город, Улица...)">
+    <button class="osm-search-btn" id="osmSearchBtn">🔍</button>
+    <div class="osm-search-results" id="osmSearchResults"></div>
+</div>
+
+<!-- Боковая панель -->
+<div class="sidebar" id="sidebar">
+    <button class="sidebar-toggle" id="sidebarToggle">◀</button>
+    <div class="sidebar-content">
+        <div class="sidebar-search" id="locSearchContainer">
+            <div class="search-input-wrapper">
+                <span class="search-icon">🔍</span>
+                <input class="search-input" id="searchInput" placeholder="Поиск локаций...">
+            </div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+        <h3 style="margin: 0 0 10px; font-size: 18px;">Фотографии</h3>
+        <div class="photos-list" id="photosList"></div>
+    </div>
+</div>
+
+<div class="auth-container" id="authContainer"></div>
+
+<!-- Модальное окно входа/регистрации -->
+<div class="modal-overlay" id="authModal">
+    <div class="modal-box">
+        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
+            <button class="auth-tab active" id="loginTab">Вход</button>
+            <button class="auth-tab" id="registerTab">Регистрация</button>
+        </div>
+
+        <!-- Форма входа -->
+        <form id="loginForm">
+            <div class="form-group"><label>Логин</label><input type="text" name="username" placeholder="Ваш логин" required></div>
+            <div class="form-group"><label>Пароль</label><input type="password" name="password" placeholder="Ваш пароль" required></div>
+            <div class="error-message" id="loginError">Неверный логин или пароль</div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAuthModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Войти</button>
+            </div>
+        </form>
+
+        <!-- Форма регистрации (изначально скрыта) -->
+        <form id="registerForm" style="display: none;">
+            <div class="form-group"><label>Логин</label><input type="text" name="username" required></div>
+            <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
+            <div class="form-group"><label>Пароль</label><input type="password" name="password" required></div>
+            <div class="form-group"><label>Повторите пароль</label><input type="password" name="password2" required></div>
+            <div class="error-message" id="registerError">Заполните все поля</div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAuthModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно профиля (обновлено) -->
+<div class="modal-overlay" id="profileModal">
+    <div class="modal-box" style="max-width: 500px;">
+        <h3>Мой профиль</h3>
+        <div id="profileContent">
+            <p>Загрузка...</p>
+        </div>
+        <div class="modal-actions" style="justify-content: center; margin-top: 15px;">
+            <button class="btn btn-primary" onclick="closeProfileModal()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="logoutConfirmModal">
+    <div class="modal-box">
+        <h3>Выход из аккаунта</h3>
+        <p style="text-align:center; color:#555;">Вы уверены, что хотите выйти?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeLogoutConfirm()">Нет</button>
+            <button class="btn btn-danger" id="confirmLogoutBtn">Да, выйти</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+        <h3>Добавить ретро-фото</h3>
+        <p id="modal-loc-name" style="color:#666; font-size:14px; margin-bottom:15px;"></p>
+        <form id="upload-form">
+            <input type="hidden" id="modal-loc-id" name="location">
+            <div class="form-group"><label>Год съемки:</label><input type="number" name="year" required placeholder="Например: 1950" min="1800" max="2026"></div>
+            <div class="form-group"><label>Фотография:</label><input type="file" name="image" accept="image/*" required></div>
+            <div class="form-group"><label>Описание:</label><textarea name="description" rows="3" placeholder="Что изображено?"></textarea></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Загрузить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="compare-overlay" id="compareOverlay">
+    <button class="compare-close" id="compareClose">&times;</button>
+    <div class="compare-container" id="compareContainer">
+        <img id="compareImgOld" class="compare-before" src="" alt="Старое фото">
+        <img id="compareImgNew" class="compare-after" src="" alt="Новое фото">
+        <div class="compare-slider" id="compareSlider"></div>
+    </div>
+    <div class="compare-info">
+        <span class="compare-year" id="compareYearOld"></span>
+        <span>↔</span>
+        <span class="compare-year" id="compareYearNew"></span>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script>
+    console.log("🚀 Скрипт загружен");
+
+    const photosCache = {};
+    const photosDataCache = {};
+    let currentUser = null;  // будет объект или null
+
+    const map = L.map('map').setView([57.6299, 39.8737], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        referrerPolicy: 'origin'
+    }).addTo(map);
+
+    // --- ГЛОБАЛЬНЫЙ ПОИСК (твоя реализация) ---
+    const osmSearchInput = document.getElementById('osmSearchInput');
+    const osmSearchBtn = document.getElementById('osmSearchBtn');
+    const osmResults = document.getElementById('osmSearchResults');
+    let osmDebounce;
+    let lastSearchData = []; 
+    let isSearching = false;
+
+    function goToResult(item) {
+        if (!item) return;
+        const lat = parseFloat(item.lat);
+        const lon = parseFloat(item.lon);
+        
+        if (item.boundingbox) {
+            const southWest = L.latLng(item.boundingbox[0], item.boundingbox[2]);
+            const northEast = L.latLng(item.boundingbox[1], item.boundingbox[3]);
+            const bounds = L.latLngBounds(southWest, northEast);
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        } else {
+            map.flyTo([lat, lon], 15);
+        }
+        
+        osmResults.style.display = 'none';
+        osmSearchInput.value = item.name || item.display_name.split(',')[0];
+    }
+
+    function performOsmSearch(query, autoSelectFirst = false) {
+        if (!query || query.length < 2) {
+            osmResults.style.display = 'none';
+            lastSearchData = [];
+            return;
+        }
+
+        isSearching = true;
+        const bounds = map.getBounds();
+        const viewbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&addressdetails=1&viewbox=${viewbox}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                isSearching = false;
+                lastSearchData = data;
+                osmResults.innerHTML = '';
+
+                if (data.length === 0) {
+                    osmResults.innerHTML = '<div class="osm-result-item">Ничего не найдено</div>';
+                    osmResults.style.display = 'block';
+                    return;
+                }
+
+                if (autoSelectFirst && data.length > 0) {
+                    goToResult(data[0]);
+                    return;
+                }
+
+                const uniqueResults = [];
+                const seenNames = new Set();
+
+                data.forEach(item => {
+                    const key = `${item.name}_${item.type}`;
+                    if (!seenNames.has(key)) {
+                        seenNames.add(key);
+                        uniqueResults.push(item);
+                    }
+                });
+
+                uniqueResults.slice(0, 5).forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'osm-result-item';
+                    
+                    let typeLabel = item.type;
+                    if(item.address.city || item.address.town) typeLabel = "Город";
+                    else if(item.address.village) typeLabel = "Село";
+                    else if(item.address.road) typeLabel = "Улица";
+                    else if(item.address.suburb) typeLabel = "Район";
+                    
+                    div.innerHTML = `<span class="osm-result-type">${typeLabel}</span> ${item.display_name}`;
+                    div.onclick = () => goToResult(item);
+                    osmResults.appendChild(div);
+                });
+                osmResults.style.display = 'block';
+            })
+            .catch(err => {
+                isSearching = false;
+                console.error('OSM Search Error:', err);
+            });
+    }
+
+    osmSearchInput.addEventListener('input', (e) => {
+        clearTimeout(osmDebounce);
+        lastSearchData = [];
+        osmResults.style.display = 'none';
+        osmDebounce = setTimeout(() => performOsmSearch(e.target.value), 500);
+    });
+
+    osmSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const query = osmSearchInput.value.trim();
+            if (isSearching) return;
+            if (lastSearchData.length > 0) {
+                goToResult(lastSearchData[0]);
+            } else if (query.length >= 2) {
+                performOsmSearch(query, true);
+            }
+        }
+    });
+
+    osmSearchBtn.addEventListener('click', () => {
+        const query = osmSearchInput.value.trim();
+        if (lastSearchData.length > 0) goToResult(lastSearchData[0]);
+        else if (query.length >= 2) performOsmSearch(query, true);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.osm-search-container')) {
+            osmResults.style.display = 'none';
+        }
+    });
+
+    // --- КЛАСТЕРНАЯ ГРУППА ---
+    const markerCluster = L.markerClusterGroup({
+        maxClusterRadius: 80,
+        iconCreateFunction: function(cluster) {
+            const count = cluster.getChildCount();
+            let size = 'small', color = '#007bff';
+            if (count > 50) { size = 'large'; color = '#e74c3c'; }
+            else if (count > 10) { size = 'medium'; color = '#f39c12'; }
+            return L.divIcon({
+                html: `<div style="background:${color}; color:white; border-radius:50%; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px;">${count}</div>`,
+                className: `marker-cluster marker-cluster-${size}`,
+                iconSize: L.point(40, 40)
+            });
+        }
+    });
+    map.addLayer(markerCluster);
+
+    const markersMap = new Map();
+
+    // ---- АВТОРИЗАЦИЯ И РЕГИСТРАЦИЯ ----
+    const authContainer = document.getElementById('authContainer');
+    const profileModal = document.getElementById('profileModal');
+    const logoutConfirmModal = document.getElementById('logoutConfirmModal');
+    const authModal = document.getElementById('authModal');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const loginTab = document.getElementById('loginTab');
+    const registerTab = document.getElementById('registerTab');
+    const loginError = document.getElementById('loginError');
+    const registerError = document.getElementById('registerError');
+
+    // Переключение вкладок
+    loginTab.addEventListener('click', () => {
+        loginTab.classList.add('active');
+        registerTab.classList.remove('active');
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+    });
+    registerTab.addEventListener('click', () => {
+        registerTab.classList.add('active');
+        loginTab.classList.remove('active');
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'block';
+    });
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function renderAuth() {
+        if (currentUser) {
+            authContainer.innerHTML = `
+                <div class="user-info">
+                    <div class="user-avatar">${currentUser.username.charAt(0).toUpperCase()}</div>
+                    <button class="user-name" id="profileLink">${currentUser.username}</button>
+                    <button class="btn-logout" title="Выйти" id="logoutBtn">&#10140;</button>
+                </div>`;
+            document.getElementById('profileLink').addEventListener('click', openProfileModal);
+            document.getElementById('logoutBtn').addEventListener('click', openLogoutConfirm);
+        } else {
+            authContainer.innerHTML = '<button class="btn-login" id="loginBtn">👤 Войти</button>';
+            document.getElementById('loginBtn').addEventListener('click', openAuthModal);
+        }
+    }
+
+    async function checkAuth() {
+        try {
+            const resp = await fetch('/api/user/');
+            if (resp.ok) currentUser = await resp.json();
+            else currentUser = null;
+        } catch (e) { currentUser = null; }
+        renderAuth();
+    }
+
+    function openAuthModal() {
+        loginError.style.display = 'none';
+        registerError.style.display = 'none';
+        authModal.style.display = 'flex';
+        loginForm.reset();
+        registerForm.reset();
+        // по умолчанию показываем вход
+        loginTab.click();
+    }
+    function closeAuthModal() { authModal.style.display = 'none'; }
+
+    // Вход
+    loginForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const username = loginForm.querySelector('input[name="username"]').value;
+        const password = loginForm.querySelector('input[name="password"]').value;
+        loginError.style.display = 'none';
+        try {
+            const resp = await fetch('/api/login/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (resp.ok) {
+                closeAuthModal();
+                const user = await resp.json();
+                currentUser = user;
+                renderAuth();
+                // Обновим все фото и профиль, если он открыт
+                await loadAllPhotos();
+                renderPhotos();
+                if (profileModal.style.display === 'flex') await openProfileModal();
+            } else {
+                const errData = await resp.json();
+                loginError.textContent = errData.error || 'Неверный логин или пароль';
+                loginError.style.display = 'block';
+            }
+        } catch (err) {
+            loginError.textContent = 'Ошибка сети';
+            loginError.style.display = 'block';
+        }
+    });
+
+    // Регистрация
+    registerForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const username = registerForm.querySelector('input[name="username"]').value;
+        const email = registerForm.querySelector('input[name="email"]').value;
+        const password = registerForm.querySelector('input[name="password"]').value;
+        const password2 = registerForm.querySelector('input[name="password2"]').value;
+        registerError.style.display = 'none';
+
+        if (!username || !email || !password || !password2) {
+            registerError.textContent = 'Все поля обязательны';
+            registerError.style.display = 'block';
+            return;
+        }
+        if (password !== password2) {
+            registerError.textContent = 'Пароли не совпадают';
+            registerError.style.display = 'block';
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/register/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, email, password, password2 })
+            });
+            if (resp.ok) {
+                closeAuthModal();
+                const user = await resp.json();
+                currentUser = user;
+                renderAuth();
+                // Перезагружаем фото (чтобы профиль мог показать)
+                await loadAllPhotos();
+                renderPhotos();
+            } else {
+                const errData = await resp.json();
+                registerError.textContent = errData.error || 'Ошибка регистрации';
+                registerError.style.display = 'block';
+            }
+        } catch (err) {
+            registerError.textContent = 'Ошибка сети';
+            registerError.style.display = 'block';
+        }
+    });
+
+    async function logout() {
+        await fetch('/api/logout/', { method: 'POST' });
+        currentUser = null;
+        renderAuth();
+        // После выхода сбрасываем загруженные фото до общего списка
+        await loadAllPhotos();
+        renderPhotos();
+    }
+
+    function openLogoutConfirm() { logoutConfirmModal.style.display = 'flex'; }
+    function closeLogoutConfirm() { logoutConfirmModal.style.display = 'none'; }
+    document.getElementById('confirmLogoutBtn').addEventListener('click', () => {
+        closeLogoutConfirm();
+        logout();
+    });
+
+    // --- ПРОФИЛЬ ---
+    async function openProfileModal() {
+        profileModal.style.display = 'flex';
+        if (!currentUser) {
+            document.getElementById('profileContent').innerHTML = '<p>Необходимо войти в систему</p>';
+            return;
+        }
+        try {
+            const resp = await fetch('/api/user/');
+            const userData = await resp.json();
+            const allPhotos = await (await fetch('/api/photos/')).json();
+            const photos = Array.isArray(allPhotos) ? allPhotos : (allPhotos.results || []);
+            const userPhotos = photos.filter(p => p.owner === userData.id);
+
+            const html = `
+                <p><strong>Имя:</strong> ${userData.username}</p>
+                <p><strong>Email:</strong> ${userData.email || 'не указан'}</p>
+                <p><strong>Загружено фото:</strong> ${userPhotos.length}</p>
+                <h4>Мои фотографии:</h4>
+                <div class="popup-gallery" style="max-height: 300px;">
+                    ${userPhotos.length > 0 ? userPhotos.map(p => `
+                        <div class="popup-gallery-item" data-locid="${p.location}" style="cursor:pointer;">
+                            <img src="${p.image}" class="popup-img" loading="lazy">
+                            <div class="popup-year">${p.year} (${p.status_name})</div>
+                            ${p.description ? `<div class="popup-desc">${p.description}</div>` : ''}
+                        </div>
+                    `).join('') : '<em>Нет загруженных фото</em>'}
+                </div>
+            `;
+            document.getElementById('profileContent').innerHTML = html;
+
+            // При клике на фото в профиле переходим к маркеру
+            document.querySelectorAll('#profileContent .popup-gallery-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const locId = item.dataset.locid;
+                    if (locId) {
+                        const marker = markersMap.get(String(locId));
+                        if (marker) {
+                            closeProfileModal();
+                            markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+                        }
+                    }
+                });
+            });
+        } catch (err) {
+            document.getElementById('profileContent').innerHTML = '<p>Не удалось загрузить профиль</p>';
+        }
+    }
+
+    function closeProfileModal() {
+        profileModal.style.display = 'none';
+    }
+
+    // --- ЗАГРУЗКА ФОТО (формы) ---
+    function openUploadModal(locId, locName) {
+        if (!currentUser) {
+            alert('Для добавления фото необходимо войти в систему.');
+            openAuthModal();
+            return;
+        }
+        document.getElementById('modal-loc-id').value = locId;
+        document.getElementById('modal-loc-name').innerText = "Локация: " + locName;
+        document.getElementById('modal-overlay').style.display = 'flex';
+    }
+    function closeUploadModal() {
+        document.getElementById('modal-overlay').style.display = 'none';
+        document.getElementById('upload-form').reset();
+    }
+    document.getElementById('upload-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const csrftoken = getCookie('csrftoken');
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Загрузка...";
+        try {
+            const response = await fetch('/api/photos/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrftoken },
+                body: formData
+            });
+            if (response.ok) {
+                alert('✅ Фото отправлено на модерацию!');
+                closeUploadModal();
+                // обновить кэш и ленту
+                await loadAllPhotos();
+                renderPhotos();
+                // если открыт профиль – обновить и его
+                if (profileModal.style.display === 'flex') await openProfileModal();
+            } else {
+                const err = await response.json();
+                alert('Ошибка: ' + JSON.stringify(err));
+            }
+        } catch (error) {
+            alert('Ошибка сети');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Загрузить";
+        }
+    });
+
+    // --- СЛАЙДЕР СРАВНЕНИЯ (без изменений) ---
+    const compareOverlay = document.getElementById('compareOverlay');
+    const compareContainer = document.getElementById('compareContainer');
+    const compareImgOld = document.getElementById('compareImgOld');
+    const compareImgNew = document.getElementById('compareImgNew');
+    const compareSlider = document.getElementById('compareSlider');
+    const compareYearOld = document.getElementById('compareYearOld');
+    const compareYearNew = document.getElementById('compareYearNew');
+    let isDragging = false;
+
+    function openCompare(locId, locName) {
+        const photos = photosDataCache[locId];
+        if (!photos || photos.length < 2) return;
+        const sorted = [...photos].sort((a, b) => a.year - b.year);
+        const oldest = sorted[0], newest = sorted[sorted.length - 1];
+        compareImgOld.src = oldest.image;
+        compareImgNew.src = newest.image;
+        compareYearOld.textContent = oldest.year;
+        compareYearNew.textContent = newest.year;
+        compareImgOld.style.clipPath = 'inset(0 calc(100% - 50%) 0 0)';
+        compareImgNew.style.clipPath = 'inset(0 0 0 50%)';
+        compareSlider.style.left = '50%';
+        compareOverlay.style.display = 'flex';
+    }
+    function closeCompare() { compareOverlay.style.display = 'none'; }
+    document.getElementById('compareClose').addEventListener('click', closeCompare);
+    compareOverlay.addEventListener('click', function(e) { if (e.target === compareOverlay) closeCompare(); });
+
+    function startDrag(e) { isDragging = true; e.preventDefault(); }
+    function stopDrag() { isDragging = false; }
+    function dragSlider(e) {
+        if (!isDragging) return;
+        const rect = compareContainer.getBoundingClientRect();
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let x = clientX - rect.left;
+        x = Math.max(0, Math.min(x, rect.width));
+        const percent = (x / rect.width) * 100;
+        compareImgOld.style.clipPath = `inset(0 calc(100% - ${percent}%) 0 0)`;
+        compareImgNew.style.clipPath = `inset(0 0 0 ${percent}%)`;
+        compareSlider.style.left = percent + '%';
+    }
+    compareSlider.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', dragSlider);
+    window.addEventListener('mouseup', stopDrag);
+    compareSlider.addEventListener('touchstart', startDrag);
+    window.addEventListener('touchmove', dragSlider);
+    window.addEventListener('touchend', stopDrag);
+
+    // ===== Боковая панель и поиск по локациям =====
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    const photosList = document.getElementById('photosList');
+
+    let currentFilterLocId = null; // null = все фото
+    let allPhotos = []; // кэш всех фото
+
+    // Переключение видимости панели
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('hidden');
+        sidebarToggle.textContent = sidebar.classList.contains('hidden') ? '▶' : '◀';
+        setTimeout(() => map.invalidateSize(), 300);
+    });
+
+    // Загрузка всех опубликованных фото
+    async function loadAllPhotos() {
+        try {
+            const resp = await fetch('/api/photos/');
+            if (!resp.ok) throw new Error('Ошибка загрузки');
+            const data = await resp.json();
+            allPhotos = Array.isArray(data) ? data : (data.results || []);
+        } catch (e) {
+            allPhotos = [];
+        }
+    }
+
+    // Отображение фото в панели (все или по локации)
+    function renderPhotos() {
+        let photos = allPhotos;
+        if (currentFilterLocId) {
+            photos = allPhotos.filter(p => String(p.location) === String(currentFilterLocId));
+        }
+        if (photos.length === 0) {
+            photosList.innerHTML = '<div class="no-photos">Нет фотографий</div>';
+            return;
+        }
+        photosList.innerHTML = photos.map(photo => `
+            <div class="photo-card" data-locid="${photo.location}" data-lat="${photo.latitude || ''}" data-lon="${photo.longitude || ''}">
+                <img src="${photo.image}" alt="Фото ${photo.year}">
+                <div class="photo-card-info">
+                    <span class="photo-card-year">${photo.year}</span>
+                    <div class="photo-card-desc">${photo.description || ''}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // Обработчики кликов на карточки
+        document.querySelectorAll('.photo-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const locId = card.dataset.locid;
+                if (locId) {
+                    const marker = markersMap.get(String(locId));
+                    if (marker) {
+                        markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+                    }
+                }
+            });
+        });
+    }
+
+    // Фильтр по локации (из поиска)
+    function setLocationFilter(locId, locName) {
+        currentFilterLocId = locId;
+        searchInput.value = locName || '';
+        hideSearchResults();
+        renderPhotos();
+    }
+
+    // Поиск локаций (только по существующим)
+    let locDebounce;
+    function displayLocResults(locations) {
+        searchResults.innerHTML = '';
+        if (!locations || locations.length === 0) {
+            searchResults.innerHTML = '<div class="search-no-results">Ничего не найдено</div>';
+            searchResults.classList.add('show');
+            return;
+        }
+        locations.slice(0, 7).forEach(loc => {
+            const props = loc.properties || {};
+            const locId = props.id || loc.id;
+            const locName = props.name || 'Без названия';
+            const locType = props.location_type_name || '';
+            const div = document.createElement('div');
+            div.className = 'search-result-item';
+            div.innerHTML = `<span>${locName}</span>${locType ? `<small> (${locType})</small>` : ''}`;
+            div.addEventListener('click', () => setLocationFilter(locId, locName));
+            searchResults.appendChild(div);
+        });
+        searchResults.classList.add('show');
+    }
+
+    function hideSearchResults() {
+        searchResults.classList.remove('show');
+    }
+
+    async function performLocSearch(query) {
+        if (query.length < 2) {
+            hideSearchResults();
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/locations/?search=${encodeURIComponent(query)}`);
+            if (!resp.ok) throw new Error('Search failed');
+            const data = await resp.json();
+            let features = [];
+            if (data.results?.type === "FeatureCollection") features = data.results.features;
+            else if (data.type === "FeatureCollection") features = data.features;
+            else if (Array.isArray(data)) features = data;
+            displayLocResults(features);
+        } catch (err) {
+            console.error('Loc search error:', err);
+            hideSearchResults();
+        }
+    }
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(locDebounce);
+        locDebounce = setTimeout(() => performLocSearch(searchInput.value.trim()), 300);
+    });
+
+    // Сброс фильтра при очистке поля вручную
+    searchInput.addEventListener('keyup', (e) => {
+        if (e.key === 'Escape' || searchInput.value === '') {
+            currentFilterLocId = null;
+            renderPhotos();
+        }
+    });
+
+    // Закрытие поисковых подсказок при клике вне
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#locSearchContainer')) {
+            hideSearchResults();
+        }
+    });
+
+    // Загрузка карты (маркеры и первичная загрузка фото)
+    async function loadData() {
+        try {
+            const locResponse = await fetch('/api/locations/');
+            if (!locResponse.ok) throw new Error(`API Локаций: ${locResponse.status}`);
+            const rawData = await locResponse.json();
+            let locations = [];
+            if (rawData.results?.type === "FeatureCollection") locations = rawData.results.features;
+            else if (rawData.type === "FeatureCollection") locations = rawData.features;
+            else if (Array.isArray(rawData)) locations = rawData;
+
+            console.log(`📍 Локаций найдено: ${locations.length}`);
+            markerCluster.clearLayers();
+            markersMap.clear();
+
+            locations.forEach(feature => {
+                let geometry = feature.geometry;
+                if (!geometry && feature.coordinates) geometry = { type: "Point", coordinates: feature.coordinates };
+                if (!geometry?.coordinates) return;
+                const coordsLeaflet = [geometry.coordinates[1], geometry.coordinates[0]];
+                const props = feature.properties || {};
+                const locId = props.id || feature.id;
+                const locName = props.name || "Без названия";
+                if (!locId) return;
+
+                const marker = L.marker(coordsLeaflet);
+                markerCluster.addLayer(marker);
+                markersMap.set(String(locId), marker);
+
+                marker.bindPopup(`
+                    <div class="popup-content" id="popup-${locId}">
+                        <b>${locName}</b><br>
+                        <div class="popup-photos"><em>Загрузка фото...</em></div>
+                        <div class="popup-actions" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap;">
+                            <button class="btn-add" onclick="openUploadModal(${locId}, '${locName.replace(/'/g, "\\'")}')">+ Добавить фото</button>
+                            <button class="btn-compare" id="compareBtn-${locId}" style="display:none;" onclick="openCompare(${locId}, '${locName.replace(/'/g, "\\'")}')">⇔ Сравнить</button>
+                        </div>
+                    </div>
+                `);
+
+                marker.on('popupopen', async () => {
+                    const container = document.getElementById(`popup-${locId}`);
+                    if (!container) return;
+                    const galleryDiv = container.querySelector('.popup-photos');
+                    const compareBtn = container.querySelector(`#compareBtn-${locId}`);
+                    if (photosCache[locId]) {
+                        galleryDiv.innerHTML = photosCache[locId];
+                        compareBtn.style.display = (photosDataCache[locId]?.length >= 2) ? 'inline-block' : 'none';
+                        return;
+                    }
+                    try {
+                        const photosResp = await fetch(`/api/photos/?location=${locId}`);
+                        if (!photosResp.ok) throw new Error('Ошибка загрузки');
+                        const photosData = await photosResp.json();
+                        const photos = Array.isArray(photosData) ? photosData : (photosData.results || []);
+                        photosDataCache[locId] = photos;
+                        let html = '';
+                        if (photos.length === 0) {
+                            html = '<em>Нет опубликованных фото</em>';
+                            compareBtn.style.display = 'none';
+                        } else {
+                            html = '<div class="popup-gallery">';
+                            photos.forEach(photo => {
+                                html += `<div class="popup-gallery-item">
+                                    <img src="${photo.image}" class="popup-img" loading="lazy">
+                                    <div class="popup-year">${photo.year}</div>
+                                    ${photo.description ? `<div class="popup-desc">${photo.description}</div>` : ''}
+                                </div>`;
+                            });
+                            html += '</div>';
+                            compareBtn.style.display = photos.length >= 2 ? 'inline-block' : 'none';
+                        }
+                        photosCache[locId] = html;
+                        galleryDiv.innerHTML = html;
+                    } catch (err) {
+                        galleryDiv.innerHTML = '<em>Ошибка загрузки фото</em>';
+                        compareBtn.style.display = 'none';
+                    }
+                });
+            });
+            markerCluster.refreshClusters();
+        } catch (error) {
+            console.error("❌ Ошибка загрузки карты:", error);
+        }
+
+        // Загружаем все фото для панели
+        await loadAllPhotos();
+        renderPhotos();
+    }
+
+    checkAuth();
+    loadData();
+</script>
+</body>
+</html>
