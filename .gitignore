@@ -6,7 +6,7 @@ media/
 staticfiles/
 
 # Файл с секретами
-.env
+secret.env
 
 # Файлы Python
 __pycache__/
@@ -19,3 +19,5 @@ __pycache__/
 
 # Файлы базы данных
 *.sqlite3
+
+settings.py
