@@ -10,358 +10,375 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
+    <!-- Fonts & Icons for Modern Look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        /* ========== MODERN VARIABLES ========== */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --accent-primary: #6366f1; /* Indigo */
+            --accent-hover: #4f46e5;
+            --border-color: #e5e7eb;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+        }
+
+        /* ========== BASE STYLES ========== */
+        * { box-sizing: border-box; outline: none; }
+        body { 
+            margin: 0; padding: 0; 
+            font-family: 'Manrope', 'Segoe UI', sans-serif; 
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }
+        h1, h2, h3, h4 { font-family: 'Inter', sans-serif; }
+        
         #map { height: 100vh; width: 100%; z-index: 1; }
 
-        /* Стили для умного поиска */
+        /* Hide Scrollbar but keep functionality */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* ========== SEARCH BAR (FLOATING) ========== */
         .osm-search-container {
-            position: absolute;
-            top: 10px;
-            left: 60px; 
-            z-index: 1000;
-            background: white;
-            border-radius: 4px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
-            display: flex;
-            align-items: center;
-            width: 400px;
-            max-width: calc(100% - 80px);
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        width: 400px;
+        max-width: calc(100vw - 60px);
+        transition: transform 0.3s ease;
+        }
+        
+
+        .search-wrapper {
+            background: var(--bg-primary);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            display: flex; align-items: center;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
         }
         .osm-search-input {
-            border: none;
-            padding: 10px;
-            width: 100%;
-            outline: none;
-            font-size: 16px;
-            border-radius: 4px 0 0 4px;
+            border: none; padding: 12px 16px; width: 100%;
+            font-size: 14px; color: var(--text-primary); background: transparent;
+            font-family: inherit;
         }
         .osm-search-btn {
-            background: white;
-            border: none;
-            border-left: 1px solid #ccc;
-            padding: 0 12px;
-            cursor: pointer;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 0 4px 4px 0;
+            background: transparent; border: none; border-left: 1px solid var(--border-color);
+            padding: 0 16px; cursor: pointer; color: var(--text-secondary);
+            height: 100%; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
         }
-        .osm-search-btn:hover { background: #f4f4f4; }
+        .osm-search-btn:hover { background: var(--bg-secondary); color: var(--accent-primary); }
         
-        /* Выпадающий список результатов */
         .osm-search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border-radius: 0 0 4px 4px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-height: 300px;
-            overflow-y: auto;
-            display: none;
+            position: absolute; top: 110%; left: 0; right: 0;
+            background: var(--bg-primary); border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md); max-height: 300px; overflow-y: auto;
+            display: none; border: 1px solid var(--border-color);
         }
         .osm-result-item {
-            padding: 10px 12px;
-            cursor: pointer;
-            border-bottom: 1px solid #eee;
-            font-size: 14px;
-            line-height: 1.4;
+            padding: 12px 16px; cursor: pointer; font-size: 13px;
+            border-bottom: 1px solid var(--border-color); line-height: 1.4;
         }
         .osm-result-item:last-child { border-bottom: none; }
-        .osm-result-item:hover { background-color: #f0f0f0; }
-        .osm-result-type {
-            font-size: 11px;
-            color: #888;
-            text-transform: uppercase;
-            margin-right: 5px;
+        .osm-result-item:hover { background: var(--bg-secondary); }
+        .osm-result-type { 
+            font-size: 10px; text-transform: uppercase; color: var(--text-secondary); 
+            margin-right: 6px; font-weight: 700; letter-spacing: 0.5px;
         }
 
-        /* Остальные стили без изменений */
-        .auth-container {
-            position: fixed; top: 20px; right: 20px; z-index: 2000;
-            display: flex; align-items: center; gap: 12px;
-        }
-        .btn-login {
-            background: white; border: none; border-radius: 30px;
-            padding: 10px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            font-size: 15px; font-weight: 500; cursor: pointer;
-            display: flex; align-items: center; gap: 8px;
-            transition: transform 0.2s, box-shadow 0.2s; color: #333;
-        }
-        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
-        .user-info {
-            display: flex; align-items: center; gap: 10px;
-            background: white; border-radius: 30px;
-            padding: 6px 14px 6px 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        .user-avatar {
-            width: 32px; height: 32px; border-radius: 50%;
-            background: #007bff; color: white;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 16px;
-        }
-        .user-name {
-            font-weight: 500; color: #333; max-width: 120px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            font-size: 15px; cursor: pointer;
-            border-bottom: 2px dashed transparent; transition: border-color 0.2s;
-            background: none; border: none; padding: 0; font-family: inherit;
-        }
-        .user-name:hover { border-bottom: 2px dashed #007bff; color: #007bff; }
-        .btn-logout {
-            background: none; border: none; cursor: pointer; font-size: 18px;
-            padding: 4px; border-radius: 50%; transition: background 0.2s;
-            display: flex; align-items: center; justify-content: center; color: #666;
-        }
-        .btn-logout:hover { background: #f0f0f0; color: #ff4444; }
-
-        /* Боковая панель */
+        /* ========== SIDEBAR ========== */
         .sidebar {
-            position: fixed;
-            top: 0; left: 0;
-            width: 360px;
-            height: 100vh;
-            background: white;
-            box-shadow: 2px 0 15px rgba(0,0,0,0.15);
-            z-index: 2500;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s ease;
-            transform: translateX(0);
+            position: fixed; top: 0; left: 0; width: 360px; height: 100vh;
+            background: var(--bg-primary);
+            box-shadow: 4px 0 24px rgba(0,0,0,0.05);
+            z-index: 1001; display: flex; flex-direction: column;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-right: 1px solid var(--border-color);
         }
-        .sidebar.hidden {
-            transform: translateX(-360px);
-        }
+        .sidebar.hidden { transform: translateX(-360px); }
+        
         .sidebar-toggle {
-            position: absolute;
-            top: 20px;
-            right: -40px;
-            width: 36px;
-            height: 36px;
-            background: white;
-            border: none;
+            position: absolute; top: 20px; right: -40px;
+            width: 40px; height: 40px; background: var(--bg-primary);
+            border: 1px solid var(--border-color); border-left: none;
             border-radius: 0 8px 8px 0;
-            box-shadow: 2px 0 8px rgba(0,0,0,0.15);
-            cursor: pointer;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 2501;
-            color: #333;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--text-secondary);
+            box-shadow: 4px 0 8px rgba(0,0,0,0.05);
+            z-index: 1002; transition: all 0.2s;
         }
+        .sidebar-toggle:hover { color: var(--accent-primary); }
+
         .sidebar-content {
             padding: 20px;
-            overflow-y: auto;
-            flex: 1;
+            flex: 1; /* Занимает все свободное место */
             display: flex;
             flex-direction: column;
             gap: 15px;
+            height: 100%; /* Важно: растягиваем на всю высоту родителя */
+            overflow: hidden; /* Скрываем вылезающее содержимое */
+            min-height: 0; /* Фикс для Flexbox в Firefox/Chrome */
         }
-        .sidebar-search {
-            position: relative;
+        
+        .sidebar-header { margin-bottom: 5px; }
+        .sidebar-header i { color: var(--accent-primary); }
+
+        .sidebar-search { position: relative; }
+        .search-input-wrapper {
+            display: flex; align-items: center; background: var(--bg-secondary);
+            border-radius: var(--radius-sm); padding: 0 12px;
+            border: 1px solid var(--border-color); transition: border-color 0.2s;
         }
-        .sidebar-search .search-input-wrapper {
-            display: flex; align-items: center; background: #f5f5f5;
-            border-radius: 30px; padding: 10px 15px;
-            border: 2px solid #e0e0e0;
-            transition: border-color 0.2s;
-        }
-        .sidebar-search .search-input-wrapper:focus-within {
-            border-color: #007bff;
-        }
-        .sidebar-search .search-icon {
-            font-size: 16px; margin-right: 8px; color: #666;
-        }
-        .sidebar-search .search-input {
+        .search-input-wrapper:focus-within { border-color: var(--accent-primary); }
+        .search-icon { font-size: 14px; color: var(--text-secondary); margin-right: 8px; }
+        .search-input {
             border: none; outline: none; font-size: 14px; width: 100%;
-            background: transparent;
+            background: transparent; padding: 10px 0; color: var(--text-primary);
         }
-        .sidebar-search .search-results {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0; right: 0;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 2600;
-            margin-top: 5px;
+        .search-results {
+            display: none; position: absolute; top: 100%; left: 0; right: 0;
+            background: var(--bg-primary); border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-md); max-height: 200px; overflow-y: auto;
+            z-index: 10; margin-top: 5px; border: 1px solid var(--border-color);
         }
-        .sidebar-search .search-results.show {
-            display: block;
+        .search-results.show { display: block; }
+        .search-result-item {
+            padding: 10px 14px; cursor: pointer; font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
         }
-        .sidebar-search .search-result-item {
-            padding: 10px 15px;
-            cursor: pointer;
-            font-size: 14px;
-            border-bottom: 1px solid #eee;
-        }
-        .sidebar-search .search-result-item:hover {
-            background: #f5f8ff;
-        }
-        .sidebar-search .search-no-results {
-            padding: 12px 15px;
-            color: #888;
-            font-style: italic;
-        }
+        .search-result-item:hover { background: var(--bg-secondary); color: var(--accent-primary); }
+        .search-no-results { padding: 12px 14px; color: var(--text-secondary); font-style: italic; font-size: 13px; }
 
         .photos-list {
-            flex: 1;
-            overflow-y: auto;
+            flex: 1; /* Занимает всё оставшееся место после заголовков и фильтров */
+            overflow-y: auto; /* Включает вертикальную прокрутку */
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
+            margin-top: 10px;
+            padding-right: 4px; /* Место под скроллбар */
+            min-height: 0; /* Критически важно для работы flex-скролла */
         }
+        
         .photo-card {
-            background: #fafafa;
-            border-radius: 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
             overflow: hidden;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.2s ease;
+            flex-shrink: 0; /* Запрещаем карточке сжиматься */
         }
         .photo-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: var(--shadow-md);
+            border-color: var(--accent-primary);
         }
         .photo-card img {
             width: 100%;
-            height: 140px;
-            object-fit: cover;
+            height: 200px; /* Фиксированная высота, чтобы все были одинаковые */
+            object-fit: cover; /* Обрезает лишнее, сохраняя пропорции */
+            display: block;
         }
         .photo-card-info {
-            padding: 8px 12px;
+            padding: 12px;
         }
         .photo-card-year {
-            font-weight: 600;
-            color: #007bff;
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            color: var(--accent-primary);
+            font-size: 14px;
+            display: block;
+            margin-bottom: 4px;
         }
         .photo-card-desc {
             font-size: 13px;
-            color: #555;
-            margin-top: 4px;
-            white-space: nowrap;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            /* Красивое обрезание текста троеточием */
+            display: -webkit-box;
+            -webkit-line-clamp: 3; /* Максимум 3 строки */
+            -webkit-box-orient: vertical;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .no-photos {
-            text-align: center;
-            color: #888;
-            margin-top: 30px;
-        }
+        .no-photos { text-align: center; color: var(--text-secondary); margin-top: 30px; font-size: 14px; }
 
-        /* Модальные окна */
+        /* ========== AUTH CONTAINER ========== */
+        .auth-container {
+            position: absolute; top: 20px; right: 20px; z-index: 1000;
+        }
+        .btn-login {
+            background: var(--bg-primary); border: 1px solid var(--border-color);
+            padding: 8px 16px; border-radius: var(--radius-full);
+            font-size: 14px; font-weight: 600; color: var(--text-primary);
+            cursor: pointer; box-shadow: var(--shadow-sm);
+            display: flex; align-items: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .btn-login:hover { border-color: var(--accent-primary); color: var(--accent-primary); transform: translateY(-1px); }
+        
+        .user-info {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-primary); padding: 4px 4px 4px 12px;
+            border-radius: var(--radius-full); border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+        .user-avatar {
+            width: 32px; height: 32px; background: var(--accent-primary); color: white;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 14px;
+        }
+        .user-name {
+            font-weight: 600; color: var(--text-primary); max-width: 120px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 14px; cursor: pointer; background: none; border: none; padding: 0;
+        }
+        .user-name:hover { color: var(--accent-primary); }
+        .btn-logout {
+            background: none; border: none; cursor: pointer; font-size: 16px;
+            padding: 6px; border-radius: 50%; color: var(--text-secondary);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-logout:hover { background: #fef2f2; color: #dc2626; }
+
+        /* ========== ADD PHOTO BUTTON ========== */
+        .add-photo-btn {
+            position: absolute; bottom: 30px; right: 30px; z-index: 1000;
+            background: var(--accent-primary); color: white; border: none;
+            border-radius: 50%; width: 56px; height: 56px;
+            box-shadow: var(--shadow-md); font-size: 24px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .add-photo-btn:hover { transform: scale(1.1); background: var(--accent-hover); }
+
+        /* ========== MODALS ========== */
         .modal-overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px); z-index: 3000;
-            justify-content: center; align-items: center;
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+            z-index: 2000; align-items: center; justify-content: center;
         }
         .modal-box {
-            background: white; padding: 30px; border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3); position: relative;
-            animation: fadeIn 0.3s ease; max-width: 90vw;
+            background: var(--bg-primary); padding: 24px;
+            border-radius: var(--radius-lg); width: 400px; max-width: 90vw;
+            box-shadow: var(--shadow-md); animation: fadeIn 0.3s ease;
+            border: 1px solid var(--border-color);
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .modal-box h3 { margin-top: 0; color: #222; font-weight: 600; font-size: 22px; text-align: center; }
-        .form-group { margin-bottom: 18px; }
-        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #444; font-size: 14px; }
-        .form-group input, .form-group textarea {
-            width: 100%; padding: 12px 15px; border: 2px solid #e0e0e0;
-            border-radius: 12px; font-size: 15px; transition: border-color 0.2s;
-            box-sizing: border-box; font-family: inherit;
+        
+        .modal-box h3 { margin-top: 0; color: var(--text-primary); font-weight: 700; font-size: 20px; text-align: center; margin-bottom: 20px; }
+        
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--text-secondary); font-size: 13px; }
+        .form-control, .form-group input, .form-group textarea {
+            width: 100%; padding: 10px 12px; background: var(--bg-secondary);
+            border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+            font-size: 14px; color: var(--text-primary); font-family: inherit;
+            transition: border-color 0.2s;
         }
-        .form-group input:focus, .form-group textarea:focus { border-color: #007bff; outline: none; }
+        .form-control:focus, .form-group input:focus, .form-group textarea:focus {
+            border-color: var(--accent-primary); background: var(--bg-primary);
+        }
+        
         .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
         .btn {
-            padding: 12px 20px; border-radius: 12px; border: none;
-            font-size: 15px; font-weight: 500; cursor: pointer;
-            transition: background 0.2s, transform 0.2s;
+            padding: 10px 20px; border-radius: var(--radius-sm); border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; font-family: inherit;
         }
-        .btn:hover { transform: scale(1.02); }
-        .btn-primary { background: #007bff; color: white; flex: 1; }
-        .btn-primary:hover { background: #0056b3; }
-        .btn-secondary { background: #f0f0f0; color: #333; }
-        .btn-danger { background: #ff4444; color: white; }
-        .btn-danger:hover { background: #cc0000; }
+        .btn-primary { background: var(--accent-primary); color: white; flex: 1; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: var(--border-color); color: var(--text-primary); }
+        .btn-danger { background: #fef2f2; color: #dc2626; }
+        .btn-danger:hover { background: #fee2e2; }
 
+        .auth-tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--bg-secondary); padding: 4px; border-radius: var(--radius-sm); }
         .auth-tab {
-            cursor: pointer;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 500;
-            background: #f0f0f0;
-            color: #333;
-            border: none;
-            transition: background 0.2s;
+            flex: 1; text-align: center; padding: 8px; font-size: 13px; font-weight: 600;
+            cursor: pointer; border-radius: 4px; color: var(--text-secondary); transition: all 0.2s;
         }
-        .auth-tab.active {
-            background: #007bff;
-            color: white;
-        }
+        .auth-tab.active { background: var(--bg-primary); color: var(--accent-primary); shadow: var(--shadow-sm); }
+        .error-message { color: #dc2626; font-size: 13px; margin-top: 5px; display: none; }
 
-        .popup-content { min-width: 220px; text-align: center; font-size: 14px; }
-        .popup-img { max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 5px; display: block; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        /* ========== POPUPS & COMPARE ========== */
+        .popup-content { min-width: 220px; text-align: center; font-size: 14px; font-family: 'Manrope', sans-serif; }
+        .popup-img { max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 5px; display: block; }
+        
         .btn-add, .btn-compare {
             display: inline-block; padding: 8px 14px; color: white;
             text-decoration: none; border-radius: 6px; cursor: pointer;
-            margin-top: 8px; font-size: 13px; transition: background 0.2s; border: none;
+            margin-top: 8px; font-size: 13px; font-weight: 600; border: none;
         }
-        .btn-add { background: #007bff; }
-        .btn-add:hover { background: #0056b3; }
-        .btn-compare { background: #28a745; margin-left: 5px; }
-        .btn-compare:hover { background: #1e7e34; }
+        .btn-add { background: var(--accent-primary); }
+        .btn-add:hover { background: var(--accent-hover); }
+        .btn-compare { background: #059669; margin-left: 5px; }
+        .btn-compare:hover { background: #047857; }
 
         .popup-gallery { max-height: 230px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
-        .popup-gallery-item { border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        .popup-year { font-weight: bold; font-size: 13px; color: #333; margin-top: 3px; }
-        .popup-desc { font-size: 12px; color: #555; margin-top: 2px; }
-
-        .error-message { color: #ff4444; font-size: 13px; margin-top: 5px; display: none; }
+        .popup-gallery-item { border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .popup-year { font-weight: bold; font-size: 13px; color: var(--accent-primary); margin-top: 3px; }
+        .popup-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
         .compare-overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px); z-index: 4000;
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.9); z-index: 3000;
             justify-content: center; align-items: center; flex-direction: column;
         }
         .compare-container {
             position: relative; width: 80vw; height: 70vh; max-width: 900px;
-            max-height: 600px; border-radius: 16px; overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #333;
+            border-radius: 12px; overflow: hidden; box-shadow: 0 0 50px rgba(0,0,0,0.5);
         }
         .compare-container img {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover; user-select: none; -webkit-user-drag: none;
+            object-fit: contain; user-select: none;
         }
-        .compare-before { clip-path: inset(0 50% 0 0); }
-        .compare-after { clip-path: inset(0 0 0 50%); }
+        .compare-before { clip-path: inset(0 50% 0 0); z-index: 2; }
         .compare-slider {
-            position: absolute; top: 0; bottom: 0; width: 4px;
-            background: white; box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            left: 50%; transform: translateX(-50%); cursor: ew-resize; z-index: 10;
+            position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
+            background: white; z-index: 10; cursor: ew-resize; transform: translateX(-50%);
         }
         .compare-slider::before {
-            content: '◀ ▶'; position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%); background: white;
-            padding: 6px 10px; border-radius: 20px; font-size: 14px;
-            font-weight: bold; color: #333; white-space: nowrap;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            content: '↔'; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: white; color: black;
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-weight: bold;
         }
         .compare-close {
-            position: absolute; top: 20px; right: 20px; background: white;
-            border: none; border-radius: 50%; width: 40px; height: 40px;
-            font-size: 24px; cursor: pointer; z-index: 20;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            position: absolute; top: 20px; right: 20px; color: white;
+            font-size: 32px; cursor: pointer; z-index: 20;
         }
-        .compare-info { color: white; margin-top: 10px; font-size: 14px; text-align: center; }
-        .compare-year { display: inline-block; margin: 0 20px; font-weight: bold; }
+        .compare-info { color: white; margin-top: 16px; font-size: 16px; font-weight: 500; }
+        .compare-year { margin: 0 15px; }
+        .filter-select {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        background-size: 14px;
+        padding-right: 30px;
+        }
+        h3 { margin: 4px 0 8px; }
     </style>
 </head>
 <body>
@@ -370,35 +387,72 @@
 
 <!-- Умная поисковая строка -->
 <div class="osm-search-container">
-    <input type="text" class="osm-search-input" id="osmSearchInput" placeholder="Поиск (Город, Улица...)">
-    <button class="osm-search-btn" id="osmSearchBtn">🔍</button>
+    <div class="search-wrapper">
+        <input type="text" class="osm-search-input" id="osmSearchInput" placeholder="Поиск места...">
+        <button class="osm-search-btn" id="osmSearchBtn"><i class="fas fa-search"></i></button>
+    </div>
     <div class="osm-search-results" id="osmSearchResults"></div>
 </div>
 
 <!-- Боковая панель -->
 <div class="sidebar" id="sidebar">
-    <button class="sidebar-toggle" id="sidebarToggle">◀</button>
+    <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
     <div class="sidebar-content">
+        <div class="sidebar-header"><i class="fas fa-camera-retro"></i> РетроФото</div>
+        
         <div class="sidebar-search" id="locSearchContainer">
             <div class="search-input-wrapper">
-                <span class="search-icon">🔍</span>
-                <input class="search-input" id="searchInput" placeholder="Поиск локаций...">
+                <i class="fas fa-search search-icon"></i>
+                <input class="search-input" id="searchInput" placeholder="Поиск локации...">
             </div>
             <div class="search-results" id="searchResults"></div>
         </div>
-        <h3 style="margin: 0 0 10px; font-size: 18px;">Фотографии</h3>
-        <div class="photos-list" id="photosList"></div>
+        
+        <!-- Фильтры -->
+<div style="margin-top: 5px;">
+    <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+        <select id="filterCountry" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="onCountryChanged()">
+            <option value="">🌍 Все страны</option>
+        </select>
+        <select id="filterCity" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="applyFilters()">
+            <option value="">🏙️ Все города</option>
+        </select>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <select id="filterType" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="applyFilters()">
+            <option value="">📂 Все типы</option>
+        </select>
+        <select id="filterYear" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="applyFilters()">
+            <option value="">📅 Все годы</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="clearFilters()" title="Сбросить фильтры" style="padding:6px 10px; font-size:14px;">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+</div>
+
+<h3 style="margin: 10px 0; font-size: 14px; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Фотографии</h3>
+<div class="photos-list" id="photosList"></div>
     </div>
 </div>
 
 <div class="auth-container" id="authContainer"></div>
 
+<button class="add-photo-btn" id="addPhotoBtn" style="display: none;" title="Добавить фото">
+    <i class="fas fa-plus"></i>
+</button>
+
+<!-- Модальное окно добавления фото -->
+<div class="modal-overlay" id="addPhotoModal">
+    <div class="modal-box" id="addPhotoModalContent"></div>
+</div>
+
 <!-- Модальное окно входа/регистрации -->
 <div class="modal-overlay" id="authModal">
     <div class="modal-box">
-        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
-            <button class="auth-tab active" id="loginTab">Вход</button>
-            <button class="auth-tab" id="registerTab">Регистрация</button>
+        <div class="auth-tabs">
+            <div class="auth-tab active" id="loginTab">Вход</div>
+            <div class="auth-tab" id="registerTab">Регистрация</div>
         </div>
 
         <!-- Форма входа -->
@@ -412,7 +466,7 @@
             </div>
         </form>
 
-        <!-- Форма регистрации (изначально скрыта) -->
+        <!-- Форма регистрации -->
         <form id="registerForm" style="display: none;">
             <div class="form-group"><label>Логин</label><input type="text" name="username" required></div>
             <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
@@ -427,7 +481,7 @@
     </div>
 </div>
 
-<!-- Модальное окно профиля (обновлено) -->
+<!-- Модальное окно профиля -->
 <div class="modal-overlay" id="profileModal">
     <div class="modal-box" style="max-width: 500px;">
         <h3>Мой профиль</h3>
@@ -443,7 +497,7 @@
 <div class="modal-overlay" id="logoutConfirmModal">
     <div class="modal-box">
         <h3>Выход из аккаунта</h3>
-        <p style="text-align:center; color:#555;">Вы уверены, что хотите выйти?</p>
+        <p style="text-align:center; color:var(--text-secondary);">Вы уверены, что хотите выйти?</p>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeLogoutConfirm()">Нет</button>
             <button class="btn btn-danger" id="confirmLogoutBtn">Да, выйти</button>
@@ -454,7 +508,7 @@
 <div class="modal-overlay" id="modal-overlay">
     <div class="modal-box">
         <h3>Добавить ретро-фото</h3>
-        <p id="modal-loc-name" style="color:#666; font-size:14px; margin-bottom:15px;"></p>
+        <p id="modal-loc-name" style="color:var(--text-secondary); font-size:14px; margin-bottom:15px; text-align:center;"></p>
         <form id="upload-form">
             <input type="hidden" id="modal-loc-id" name="location">
             <div class="form-group"><label>Год съемки:</label><input type="number" name="year" required placeholder="Например: 1950" min="1800" max="2026"></div>
@@ -624,9 +678,9 @@
         maxClusterRadius: 80,
         iconCreateFunction: function(cluster) {
             const count = cluster.getChildCount();
-            let size = 'small', color = '#007bff';
+            let size = 'small', color = '#6366f1'; // Changed to Indigo
             if (count > 50) { size = 'large'; color = '#e74c3c'; }
-            else if (count > 10) { size = 'medium'; color = '#f39c12'; }
+            else if (count > 10) { size = 'medium'; color = '#f59e0b'; }
             return L.divIcon({
                 html: `<div style="background:${color}; color:white; border-radius:50%; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px;">${count}</div>`,
                 className: `marker-cluster marker-cluster-${size}`,
@@ -680,20 +734,42 @@
     }
 
     function renderAuth() {
-        if (currentUser) {
-            authContainer.innerHTML = `
+    if (currentUser) {
+        let adminButtonsHtml = '';
+        if (currentUser.is_admin) {
+            adminButtonsHtml += `<button class="btn-login" id="adminPanelBtn" style="margin-left: 8px; background: #fffbeb; color: #d97706; border: 1px solid #fcd34d;">⚙️ Админ</button>`;
+        }
+        if (currentUser.is_moderator) {
+            adminButtonsHtml += `<button class="btn-login" id="moderationPanelBtn" style="margin-left: 8px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">🛡️ Модерация</button>`;
+        }
+
+        authContainer.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
                 <div class="user-info">
                     <div class="user-avatar">${currentUser.username.charAt(0).toUpperCase()}</div>
                     <button class="user-name" id="profileLink">${currentUser.username}</button>
-                    <button class="btn-logout" title="Выйти" id="logoutBtn">&#10140;</button>
-                </div>`;
-            document.getElementById('profileLink').addEventListener('click', openProfileModal);
-            document.getElementById('logoutBtn').addEventListener('click', openLogoutConfirm);
-        } else {
-            authContainer.innerHTML = '<button class="btn-login" id="loginBtn">👤 Войти</button>';
-            document.getElementById('loginBtn').addEventListener('click', openAuthModal);
+                    <button class="btn-logout" title="Выйти" id="logoutBtn"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+                ${adminButtonsHtml}
+            </div>`;
+        document.getElementById('profileLink').addEventListener('click', openProfileModal);
+        document.getElementById('logoutBtn').addEventListener('click', openLogoutConfirm);
+
+        if (currentUser.is_admin) {
+            document.getElementById('adminPanelBtn').addEventListener('click', () => {
+                window.location.href = '/admin-panel/';
+            });
         }
+        if (currentUser.is_moderator) {
+            document.getElementById('moderationPanelBtn').addEventListener('click', () => {
+                window.location.href = '/moderation/';
+            });
+        }
+    } else {
+        authContainer.innerHTML = '<button class="btn-login" id="loginBtn"><i class="fas fa-user"></i> Войти</button>';
+        document.getElementById('loginBtn').addEventListener('click', openAuthModal);
     }
+}
 
     async function checkAuth() {
         try {
@@ -778,9 +854,10 @@
                 const user = await resp.json();
                 currentUser = user;
                 renderAuth();
-                // Перезагружаем фото (чтобы профиль мог показать)
+                // обновим фото и профиль
                 await loadAllPhotos();
                 renderPhotos();
+                if (profileModal.style.display === 'flex') await openProfileModal();
             } else {
                 const errData = await resp.json();
                 registerError.textContent = errData.error || 'Ошибка регистрации';
@@ -967,12 +1044,43 @@
     let currentFilterLocId = null; // null = все фото
     let allPhotos = []; // кэш всех фото
 
+    const locationCoords = {};    // { locId: { lat, lng } }
+    const locationMetaCache = {}; // { locId: { country, city } }
+    let allCountries = [];        // [{ country, cities: [] }]
+
     // Переключение видимости панели
     sidebarToggle.addEventListener('click', () => {
         sidebar.classList.toggle('hidden');
-        sidebarToggle.textContent = sidebar.classList.contains('hidden') ? '▶' : '◀';
+        sidebarToggle.innerHTML = sidebar.classList.contains('hidden') ? '<i class="fas fa-bars"></i>' : '<i class="fas fa-chevron-left"></i>';
         setTimeout(() => map.invalidateSize(), 300);
     });
+
+    async function resolveLocationMeta(locId) {
+        if (locationMetaCache[locId]) return locationMetaCache[locId];
+        const coords = locationCoords[locId];
+        if (!coords) return { country: '', city: '' };
+        try {
+            const resp = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lon}&accept-language=ru`
+            );
+            const data = await resp.json();
+            const country = data.address?.country || '';
+            let city = data.address?.city || data.address?.town || data.address?.village || '';
+            // Очистка от административных приставок, чтобы не было «городской округ Ярославль»
+            const prefixes = ['городской округ ', 'муниципальный район ', 'сельское поселение ', 'городское поселение ', 'район '];
+            for (const p of prefixes) {
+                if (city.toLowerCase().startsWith(p)) {
+                    city = city.substring(p.length).trim();
+                    if (city.length > 0) city = city[0].toUpperCase() + city.slice(1);
+                    break;
+                }
+            }
+            locationMetaCache[locId] = { country, city };
+            return { country, city };
+        } catch (e) {
+            return { country: '', city: '' };
+        }
+    }
 
     // Загрузка всех опубликованных фото
     async function loadAllPhotos() {
@@ -981,52 +1089,179 @@
             if (!resp.ok) throw new Error('Ошибка загрузки');
             const data = await resp.json();
             allPhotos = Array.isArray(data) ? data : (data.results || []);
+            await enrichAndPopulateFilters(allPhotos);
+            applyFilters();
         } catch (e) {
             allPhotos = [];
         }
     }
 
-    // Отображение фото в панели (все или по локации)
-    function renderPhotos() {
-        let photos = allPhotos;
-        if (currentFilterLocId) {
-            photos = allPhotos.filter(p => String(p.location) === String(currentFilterLocId));
+    // Заполнение выпадающих списков фильтров
+    async function enrichAndPopulateFilters(photos) {
+    // Соберем уникальные locId
+    const locIds = new Set(photos.map(p => p.location).filter(Boolean));
+    // Запросим метаданные для всех локаций (кэшируется)
+    const promises = Array.from(locIds).map(id => resolveLocationMeta(id));
+    await Promise.all(promises);
+
+    // Собираем фильтры
+    const types = new Set(photos.map(p => p.location_type_name || p.location_type).filter(Boolean));
+    const years = new Set(photos.map(p => p.year).filter(Boolean));
+    const countryMap = new Map(); // country -> Set of cities
+
+    photos.forEach(p => {
+        const meta = locationMetaCache[p.location] || { country: '', city: '' };
+        if (meta.country) {
+            if (!countryMap.has(meta.country)) countryMap.set(meta.country, new Set());
+            if (meta.city) {
+            const clean = meta.city.trim();
+            if (clean) countryMap.get(meta.country).add(clean);
         }
-        if (photos.length === 0) {
-            photosList.innerHTML = '<div class="no-photos">Нет фотографий</div>';
-            return;
         }
-        photosList.innerHTML = photos.map(photo => `
-            <div class="photo-card" data-locid="${photo.location}" data-lat="${photo.latitude || ''}" data-lon="${photo.longitude || ''}">
-                <img src="${photo.image}" alt="Фото ${photo.year}">
+    });
+
+    // Сохраняем структуру стран и городов
+    allCountries = Array.from(countryMap.entries()).map(([country, cities]) => ({
+        country,
+        cities: Array.from(cities).sort()
+    })).sort((a, b) => a.country.localeCompare(b.country));
+
+    // Заполняем селекты
+    const countrySelect = document.getElementById('filterCountry');
+    const citySelect = document.getElementById('filterCity');
+    const typeSelect = document.getElementById('filterType');
+    const yearSelect = document.getElementById('filterYear');
+
+    const savedCountry = countrySelect.value;
+    const savedCity = citySelect.value;
+    const savedType = typeSelect.value;
+    const savedYear = yearSelect.value;
+
+    // Страны
+    countrySelect.innerHTML = '<option value="">🌍 Все страны</option>';
+    allCountries.forEach(c => {
+        countrySelect.innerHTML += `<option value="${c.country}">${c.country}</option>`;
+    });
+    countrySelect.value = savedCountry;
+
+    // Города (зависят от выбранной страны)
+    updateCityFilter();
+
+    // Типы
+    typeSelect.innerHTML = '<option value="">📂 Все типы</option>';
+    [...types].sort().forEach(t => {
+        typeSelect.innerHTML += `<option value="${t}">${t}</option>`;
+    });
+    typeSelect.value = savedType;
+
+    // Годы
+    yearSelect.innerHTML = '<option value="">📅 Все годы</option>';
+    [...years].sort((a, b) => b - a).forEach(y => {
+        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+    });
+    yearSelect.value = savedYear;
+}
+
+    function updateCityFilter() {
+        const country = document.getElementById('filterCountry').value;
+        const citySelect = document.getElementById('filterCity');
+        const savedCity = citySelect.value;
+        citySelect.innerHTML = '<option value="">🏙️ Все города</option>';
+        if (country) {
+            const countryData = allCountries.find(c => c.country === country);
+            if (countryData) {
+                countryData.cities.forEach(city => {
+                    citySelect.innerHTML += `<option value="${city}">${city}</option>`;
+                });
+            }
+        } else {
+            // Если страна не выбрана, показываем все уникальные города из всех стран
+            const allCities = new Set();
+            allCountries.forEach(c => c.cities.forEach(city => allCities.add(city)));
+            Array.from(allCities).sort().forEach(city => {
+                citySelect.innerHTML += `<option value="${city}">${city}</option>`;
+            });
+        }
+        citySelect.value = savedCity;
+    }
+
+    // Обработчик изменения страны
+    function onCountryChanged() {
+        updateCityFilter();
+        applyFilters();
+    }
+
+    // Применение фильтров
+    function applyFilters() {
+    const typeFilter = document.getElementById('filterType').value;
+    const yearFilter = document.getElementById('filterYear').value;
+    const countryFilter = document.getElementById('filterCountry').value;
+    const cityFilter = document.getElementById('filterCity').value;
+
+    let filtered = allPhotos;
+    if (currentFilterLocId) {
+        filtered = filtered.filter(p => String(p.location) === String(currentFilterLocId));
+    }
+    if (typeFilter) {
+        filtered = filtered.filter(p => (p.location_type_name || p.location_type) === typeFilter);
+    }
+    if (yearFilter) {
+        filtered = filtered.filter(p => String(p.year) === yearFilter);
+    }
+    if (countryFilter || cityFilter) {
+        filtered = filtered.filter(p => {
+            const meta = locationMetaCache[p.location] || { country: '', city: '' };
+            if (countryFilter && meta.country !== countryFilter) return false;
+            if (cityFilter && meta.city !== cityFilter) return false;
+            return true;
+        });
+    }
+    renderPhotos(filtered);
+}
+
+    // Сброс фильтров
+    function clearFilters() {
+    document.getElementById('filterCountry').value = '';
+    document.getElementById('filterCity').value = '';
+    document.getElementById('filterType').value = '';
+    document.getElementById('filterYear').value = '';
+    currentFilterLocId = null;
+    searchInput.value = '';
+    updateCityFilter();
+    applyFilters();
+}
+
+    // Отображение фото в панели (принимает отфильтрованный массив)
+    function renderPhotos(photos = null) {
+    if (photos === null) {
+        applyFilters();
+        return;
+    }
+    if (photos.length === 0) {
+        photosList.innerHTML = '<div class="no-photos">Нет фотографий</div>';
+        return;
+    }
+    const html = photos.map(photo => {
+        const meta = locationMetaCache[photo.location] || {};
+        return `
+            <div class="photo-card" data-id="${photo.id}" onclick="showPhotoDetail(${photo.id})">
+                <div style="position:relative;">
+                    <img src="${photo.image}" alt="Фото ${photo.year}" loading="lazy">
+                    ${meta.country ? `<span style="position:absolute; top:8px; right:8px; background:var(--accent-bg); color:var(--accent-primary); font-size:10px; padding:2px 6px; border-radius:4px;">${meta.country}</span>` : ''}
+                </div>
                 <div class="photo-card-info">
                     <span class="photo-card-year">${photo.year}</span>
                     <div class="photo-card-desc">${photo.description || ''}</div>
+                    <div style="font-size:11px; color: var(--text-muted); margin-top: 6px; display: flex; justify-content: space-between;">
+                        <span>${photo.location_name || '—'}</span>
+                        <span>${photo.owner_username || '—'}</span>
+                    </div>
                 </div>
             </div>
-        `).join('');
-
-        // Обработчики кликов на карточки
-        document.querySelectorAll('.photo-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const locId = card.dataset.locid;
-                if (locId) {
-                    const marker = markersMap.get(String(locId));
-                    if (marker) {
-                        markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
-                    }
-                }
-            });
-        });
-    }
-
-    // Фильтр по локации (из поиска)
-    function setLocationFilter(locId, locName) {
-        currentFilterLocId = locId;
-        searchInput.value = locName || '';
-        hideSearchResults();
-        renderPhotos();
-    }
+        `;
+    }).join('');
+    photosList.innerHTML = html;
+}
 
     // Поиск локаций (только по существующим)
     let locDebounce;
@@ -1045,7 +1280,12 @@
             const div = document.createElement('div');
             div.className = 'search-result-item';
             div.innerHTML = `<span>${locName}</span>${locType ? `<small> (${locType})</small>` : ''}`;
-            div.addEventListener('click', () => setLocationFilter(locId, locName));
+            div.addEventListener('click', () => {
+            currentFilterLocId = locId;
+            searchInput.value = locName || '';
+            hideSearchResults();
+            applyFilters();    // вместо старого renderPhotos() – теперь всё идёт через applyFilters
+        });
             searchResults.appendChild(div);
         });
         searchResults.classList.add('show');
@@ -1109,6 +1349,16 @@
             console.log(`📍 Локаций найдено: ${locations.length}`);
             markerCluster.clearLayers();
             markersMap.clear();
+
+            // Сохраняем координаты локаций для обратного геокодирования
+            locations.forEach(feature => {
+                const props = feature.properties || {};
+                const locId = props.id || feature.id;
+                if (feature.geometry && feature.geometry.coordinates) {
+                    const [lon, lat] = feature.geometry.coordinates;
+                    locationCoords[locId] = { lat, lon };
+                }
+            });
 
             locations.forEach(feature => {
                 let geometry = feature.geometry;
@@ -1184,6 +1434,266 @@
         await loadAllPhotos();
         renderPhotos();
     }
+
+// === ФУНКЦИОНАЛ ДОБАВЛЕНИЯ ФОТО ===
+const addPhotoBtn = document.getElementById('addPhotoBtn');
+const addPhotoModal = document.getElementById('addPhotoModal');
+const addPhotoModalContent = document.getElementById('addPhotoModalContent');
+
+function showAddPhotoModal(html) {
+    addPhotoModalContent.innerHTML = html;
+    addPhotoModal.style.display = 'flex';
+}
+
+function hideAddPhotoModal() {
+    addPhotoModal.style.display = 'none';
+}
+
+// Закрытие модалки при клике на фон
+addPhotoModal.addEventListener('click', (e) => {
+    if (e.target === addPhotoModal) hideAddPhotoModal();
+});
+
+function openAddPhotoModal() {
+    if (!currentUser) {
+        alert('Необходимо войти в систему');
+        openAuthModal();
+        return;
+    }
+    const html = `
+        <h3>Добавить фотографию</h3>
+        <p>Выберите локацию или создайте новую точку на карте.</p>
+        <div class="form-group">
+            <label>Поиск существующей локации</label>
+            <input class="form-control" id="locSearchInput" placeholder="Введите название...">
+            <div id="locSearchResults" style="max-height:150px; overflow-y:auto; margin-top:5px;"></div>
+        </div>
+        <div class="modal-actions" style="flex-direction: column; gap: 10px;">
+            <button class="btn btn-secondary" onclick="hideAddPhotoModal()">Отмена</button>
+            <button class="btn btn-primary" id="createNewLocBtn">Создать новую точку на карте</button>
+        </div>
+    `;
+    showAddPhotoModal(html);
+
+    const locSearchInput = document.getElementById('locSearchInput');
+    const locSearchResults = document.getElementById('locSearchResults');
+    let searchTimeout;
+
+    locSearchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        const query = locSearchInput.value.trim();
+        if (query.length < 2) {
+            locSearchResults.innerHTML = '';
+            return;
+        }
+        searchTimeout = setTimeout(async () => {
+            const resp = await fetch(`/api/locations/?search=${encodeURIComponent(query)}`);
+            const data = await resp.json();
+            let features = [];
+            if (data.results?.features) features = data.results.features;
+            else if (data.features) features = data.features;
+            else if (Array.isArray(data)) features = data;
+            locSearchResults.innerHTML = features.slice(0, 5).map(loc => {
+                const props = loc.properties || {};
+                const locId = props.id || loc.id;
+                const locName = props.name || 'Без названия';
+                if (!locId) return '';
+                return `<div class="search-result-item" style="padding:8px;" data-locid="${locId}" data-locname="${locName.replace(/"/g, '&quot;')}">${locName}</div>`;
+            }).filter(Boolean).join('');
+
+            document.querySelectorAll('#locSearchResults .search-result-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const id = this.dataset.locid;
+                    const name = this.dataset.locname;
+                    if (id) {
+                        selectExistingLocation(Number(id), name);
+                    }
+                });
+            });
+        }, 300);
+    });
+
+    document.getElementById('createNewLocBtn').addEventListener('click', startNewLocationProcess);
+}
+
+function selectExistingLocation(id, name) {
+    const numericId = Number(id);
+    if (!numericId || isNaN(numericId)) {
+        alert('Ошибка: некорректный ID локации.');
+        return;
+    }
+    hideAddPhotoModal();
+    openUploadFormForLocation(numericId, name);
+}
+
+function startNewLocationProcess() {
+    hideAddPhotoModal();
+    alert('Кликните на карте, чтобы установить точку для новой локации.');
+    map.once('click', async function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        try {
+            const checkResp = await fetch(`/api/locations/check/?lat=${lat}&lng=${lng}`);
+            const checkData = await checkResp.json();
+            if (checkData.nearby && checkData.nearby.length > 0) {
+                const nearbyNames = checkData.nearby.map(loc => loc.name).join(', ');
+                alert(`Рядом уже есть: ${nearbyNames}. Пожалуйста, выберите одну из существующих точек.`);
+                return;  // Просто выходим, не создаём новую
+            }
+        } catch (err) {
+            // Если сервер не ответил, продолжаем
+        }
+        const name = prompt('Введите название локации:');
+        if (!name) return;
+        const createResp = await fetch('/api/locations/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({
+                name: name,
+                coordinates: { type: 'Point', coordinates: [lng, lat] }
+            })
+        });
+        const newLocation = await createResp.json();
+        if (newLocation.id) {
+            openUploadFormForLocation(Number(newLocation.id), newLocation.name || name);
+        } else {
+            alert('Ошибка создания локации. Возможно, такое название уже существует.');
+        }
+    });
+}
+
+function openUploadFormForLocation(locId, locName) {
+    locId = Number(locId);
+    if (isNaN(locId)) {
+        alert('Некорректный ID локации');
+        return;
+    }
+
+    const html = `
+        <h3>Загрузить фото для «${locName}»</h3>
+        <div class="form-group"><label>Год съёмки</label><input type="number" class="form-control" id="photoYear" required></div>
+        <div class="form-group"><label>Фотография</label><input type="file" class="form-control" id="photoImage" accept="image/*" required></div>
+        <div class="form-group"><label>Описание</label><textarea class="form-control" id="photoDesc" rows="3"></textarea></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideAddPhotoModal()">Отмена</button>
+            <button class="btn btn-primary" id="submitPhoto">Загрузить</button>
+        </div>
+    `;
+    showAddPhotoModal(html);
+    document.getElementById('submitPhoto').addEventListener('click', async () => {
+        const year = document.getElementById('photoYear').value;
+        const image = document.getElementById('photoImage').files[0];
+        const desc = document.getElementById('photoDesc').value;
+        if (!year || !image) {
+            alert('Заполните обязательные поля');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('year', year);
+        formData.append('image', image);
+        formData.append('description', desc);
+        formData.append('location', locId);
+
+        try {
+            const resp = await fetch('/api/photos/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: formData
+            });
+            if (resp.ok) {
+                alert('Фото отправлено на модерацию!');
+                hideAddPhotoModal();
+                await loadAllPhotos();
+                renderPhotos();
+                await loadData();
+            } else {
+                const err = await resp.json();
+                alert('Ошибка: ' + JSON.stringify(err));
+            }
+        } catch (e) {
+            alert('Ошибка сети');
+        }
+    });
+}
+
+    // Видимость кнопки
+    function updateAddPhotoButton() {
+        if (currentUser) {
+            addPhotoBtn.style.display = 'flex';
+        } else {
+            addPhotoBtn.style.display = 'none';
+        }
+    }
+
+    // Вызовы после авторизации
+    const originalRenderAuth = renderAuth;
+    renderAuth = function() {
+        originalRenderAuth();
+        updateAddPhotoButton();
+    };
+
+    // Инициализация
+    addPhotoBtn.addEventListener('click', openAddPhotoModal);
+    updateAddPhotoButton();
+
+    // ===== ДЕТАЛИ ФОТО =====
+let photoDetailModal = document.createElement('div');
+photoDetailModal.className = 'modal-overlay';
+photoDetailModal.id = 'photoDetailModal';
+photoDetailModal.innerHTML = `
+    <div class="modal-box" style="max-width:500px; padding:0; overflow:hidden;">
+        <div style="position:relative;">
+            <img id="detailImage" style="width:100%; max-height:350px; object-fit:contain; background:#111;" />
+            <button class="btn-close-detail" onclick="closePhotoDetail()" style="position:absolute; top:10px; right:10px; background:rgba(255,255,255,0.9); border:none; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer;">×</button>
+        </div>
+        <div style="padding:16px 20px 20px;">
+            <h3 id="detailYear" style="margin:0 0 8px; font-size:22px; color:var(--accent-primary);"></h3>
+            <p id="detailDesc" style="color:var(--text-secondary); margin-bottom:12px;"></p>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span id="detailLocation" style="font-size:14px; color:var(--text-primary);"><i class="fas fa-map-marker-alt"></i> </span>
+                <button class="btn btn-primary btn-sm" id="detailGoToMap">Показать на карте</button>
+            </div>
+            <div style="margin-top:8px; font-size:13px; color:var(--text-muted);">
+                <span id="detailAuthor"></span> · <span id="detailStatus"></span>
+            </div>
+        </div>
+    </div>
+`;
+document.body.appendChild(photoDetailModal);
+
+function showPhotoDetail(photoId) {
+    const photo = allPhotos.find(p => p.id == photoId);
+    if (!photo) return;
+    
+    document.getElementById('detailImage').src = photo.image;
+    document.getElementById('detailYear').textContent = photo.year;
+    document.getElementById('detailDesc').textContent = photo.description || 'Нет описания';
+    document.getElementById('detailLocation').innerHTML = `<i class="fas fa-map-marker-alt"></i> ${photo.location_name || '—'}`;
+    document.getElementById('detailAuthor').textContent = photo.owner_username || 'Аноним';
+    document.getElementById('detailStatus').textContent = photo.status_name || '';
+    
+    const goToMapBtn = document.getElementById('detailGoToMap');
+    goToMapBtn.onclick = () => {
+        closePhotoDetail();
+        const locId = photo.location;
+        const marker = markersMap.get(String(locId));
+        if (marker) {
+            markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+        } else {
+            alert('Локация не найдена на карте');
+        }
+    };
+    photoDetailModal.style.display = 'flex';
+    }
+
+    function closePhotoDetail() {
+        photoDetailModal.style.display = 'none';
+    }
+
+    photoDetailModal.addEventListener('click', (e) => {
+        if (e.target === photoDetailModal) closePhotoDetail();
+    });
+
 
     checkAuth();
     loadData();

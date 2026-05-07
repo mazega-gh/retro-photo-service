@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 
 
 class Role(models.Model):
@@ -17,7 +18,7 @@ class Role(models.Model):
 
 class User(AbstractUser):
     """Кастомная модель пользователя"""
-    email = models.EmailField(unique=True, verbose_name='Email')
+    email = models.EmailField(null=True, blank=True, verbose_name='Email')
     role = models.ForeignKey(
         Role, 
         on_delete=models.PROTECT, 
@@ -34,11 +35,28 @@ class User(AbstractUser):
     
     def __str__(self):
         return self.username
-    
-    @property
-    def is_moderator(self):
-        return self.role and self.role.name.lower() == 'moderator'
+
+    def save(self, *args, **kwargs):
+        # Автоматически даём права суперпользователя, если роль admin
+        if self.role and self.role.name.lower() == 'admin':
+            self.is_superuser = True
+            self.is_staff = True
+        else:
+            # Если роль не admin — убираем суперправа (на случай смены роли)
+            self.is_superuser = False
+            self.is_staff = False
+        super().save(*args, **kwargs)
     
     @property
     def is_admin(self):
-        return self.role and self.role.name.lower() == 'admin'
+        # Считаем администратором, если есть роль admin ИЛИ это суперпользователь/сотрудник
+        if self.is_superuser or self.is_staff:
+            return True
+        return self.role is not None and self.role.name.lower() == 'admin'
+
+    @property
+    def is_moderator(self):
+        # Модератор — либо роль moderator, либо также админ (который наследует права модератора)
+        if self.is_admin:
+            return True
+        return self.role is not None and self.role.name.lower() == 'moderator'

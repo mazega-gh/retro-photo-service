@@ -4,7 +4,7 @@ from django.db import models
 
 class LocationType(models.Model):
     """Справочник типов локаций"""
-    name = models.CharField(max_length=100, unique=True, verbose_name='Название категории')
+    name = models.CharField(max_length=255, unique=True, verbose_name='Название объекта')
     icon_marker = models.CharField(max_length=255, blank=True, verbose_name='Путь к иконке')
     
     class Meta:

@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from .models import RetroPhoto
 from .serializers import RetroPhotoSerializer
 from moderation.models import ModerationStatus, ModerationLog
+from accounts.views import IsAdminUser
+
 
 class RetroPhotoViewSet(viewsets.ModelViewSet):
     serializer_class = RetroPhotoSerializer
@@ -42,3 +44,12 @@ class RetroPhotoViewSet(viewsets.ModelViewSet):
             moderator=None,   # теперь допустимо благодаря null=True
             comment="Фото загружено и ожидает проверки."
         )
+
+class AdminRetroPhotoViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = RetroPhoto.objects.all()
+    serializer_class = RetroPhotoSerializer
+
+    def perform_create(self, serializer):
+        # Автоматически назначаем текущего пользователя владельцем
+        serializer.save(owner=self.request.user)

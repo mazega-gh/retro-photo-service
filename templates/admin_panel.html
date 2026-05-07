@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель • РетроФото</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* ========== CSS VARIABLES (MATCHING MODERATION PAGE) ========== */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --bg-sidebar: #ffffff;
+            --bg-hover: #f3f4f6;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --border-color: #e5e7eb;
+            --accent-primary: #6366f1;
+            --accent-bg: #eef2ff;
+            --success: #059669;
+            --success-bg: #ecfdf5;
+            --danger: #dc2626;
+            --danger-bg: #fef2f2;
+            --warning: #d97706;
+            --warning-bg: #fffbeb;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #111827;
+            --bg-secondary: #0f172a;
+            --bg-sidebar: #1f2937;
+            --bg-hover: #374151;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --border-color: #374151;
+            --accent-primary: #818cf8;
+            --accent-bg: #1e1b4b;
+            --success: #34d399;
+            --success-bg: #064e3b;
+            --danger: #f87171;
+            --danger-bg: #7f1d1d;
+            --warning: #fbbf24;
+            --warning-bg: #78350f;
+        }
+
+        /* ========== BASE & SCROLLBAR ========== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+        body::-webkit-scrollbar { width: 0px; background: transparent; }
+        html { scrollbar-width: none; -ms-overflow-style: none; }
+
+        h1, h2, h3, h4 { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--text-primary); }
+        a { text-decoration: none; color: inherit; }
+
+        /* ========== SIDEBAR ========== */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            flex-shrink: 0;
+            z-index: 20;
+        }
+        .brand {
+            font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px;
+            margin-bottom: 30px; color: var(--text-primary);
+        }
+        .brand i { color: var(--accent-primary); }
+        
+        .menu-category {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); font-weight: 700; margin: 15px 0 8px 4px;
+        }
+        
+        .nav-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 12px; border-radius: var(--radius-sm);
+            color: var(--text-secondary); font-weight: 500; font-size: 14px;
+            cursor: pointer; transition: all 0.2s; margin-bottom: 2px;
+        }
+        .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent-bg); color: var(--accent-primary); }
+        .nav-item i { width: 20px; text-align: center; }
+
+        .sidebar-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-color); }
+        
+        .theme-toggle {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; background: var(--bg-secondary);
+            border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+            cursor: pointer; font-size: 13px; color: var(--text-secondary);
+        }
+        .theme-toggle:hover { border-color: var(--text-muted); }
+        .theme-toggle .sun { display: none; }
+        .theme-toggle .moon { display: block; }
+        [data-theme="dark"] .theme-toggle .sun { display: block; }
+        [data-theme="dark"] .theme-toggle .moon { display: none; }
+
+        /* ========== MAIN CONTENT ========== */
+        .content-wrapper {
+            flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;
+        }
+        .top-bar {
+            height: 64px; background: var(--bg-primary); border-bottom: 1px solid var(--border-color);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 32px; flex-shrink: 0;
+        }
+        .page-title { font-size: 20px; font-weight: 600; }
+        .btn-back {
+            display: flex; align-items: center; gap: 8px; font-size: 13px;
+            color: var(--text-secondary); padding: 6px 12px; border-radius: var(--radius-sm);
+            transition: background 0.2s;
+        }
+        .btn-back:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+        .main-scroll { flex: 1; overflow-y: auto; padding: 32px; }
+
+        /* ========== CARDS & TABLES ========== */
+        .card {
+            background: var(--bg-primary); border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg); overflow: hidden;
+            box-shadow: var(--shadow-sm); margin-bottom: 20px;
+        }
+        .table-container { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th {
+            text-align: left; padding: 14px 16px; background: var(--bg-secondary);
+            color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color); white-space: nowrap;
+        }
+        td {
+            padding: 14px 16px; border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary); vertical-align: middle;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: var(--bg-secondary); }
+
+        /* ========== FORMS & BUTTONS ========== */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; color: var(--text-secondary); }
+        .form-control {
+            width: 100%; padding: 10px 12px; background: var(--bg-secondary);
+            border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+            color: var(--text-primary); font-size: 14px; outline: none; transition: border-color 0.2s;
+        }
+        .form-control:focus { border-color: var(--accent-primary); }
+        
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 8px 16px; border: none; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 600; cursor: pointer; transition: filter 0.2s;
+            font-family: inherit;
+        }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-primary { background: var(--accent-primary); color: white; }
+        .btn-success { background: var(--success-bg); color: var(--success); }
+        .btn-danger { background: var(--danger-bg); color: var(--danger); }
+        .btn-secondary { background: var(--bg-hover); color: var(--text-secondary); }
+        
+        .btn:hover { filter: brightness(0.95); }
+        .btn-primary:hover { filter: brightness(1.1); }
+
+        .message {
+            padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px;
+            font-size: 14px; display: none; animation: fadeIn 0.3s;
+        }
+        .success { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+        .error { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
+
+        /* ========== MAPS ========== */
+        .mini-map-container {
+            width: 100%; height: 350px; border-radius: var(--radius-md);
+            margin-bottom: 20px; border: 1px solid var(--border-color);
+            z-index: 1;
+        }
+        .map-container {
+            width: 100%; height: 300px; border-radius: var(--radius-sm);
+            margin-bottom: 15px; border: 1px solid var(--border-color); z-index: 1;
+        }
+
+        /* ========== MODALS ========== */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background: var(--bg-primary); padding: 24px; border-radius: var(--radius-lg);
+            width: 600px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+            box-shadow: var(--shadow-md); border: 1px solid var(--border-color);
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Roles Grid */
+        .roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+        .role-card {
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            padding: 16px; border-radius: var(--radius-md);
+        }
+        .role-card h4 { font-size: 15px; margin-bottom: 4px; }
+        .role-card span { font-size: 12px; color: var(--text-muted); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { flex-direction: column; height: auto; overflow: auto; }
+            .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); padding: 12px; }
+            .menu-category { display: none; }
+            .nav-item { display: inline-flex; margin-right: 8px; white-space: nowrap; }
+            .content-wrapper { height: auto; }
+            .main-scroll { padding: 16px; overflow: visible; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="brand"><i class="fas fa-cogs"></i> Админ-панель</div>
+
+    <div class="menu-category">Пользователи</div>
+    <a href="#" class="nav-item active" data-section="users"><i class="fas fa-users"></i> Пользователи</a>
+    <a href="#" class="nav-item" data-section="roles"><i class="fas fa-key"></i> Роли</a>
+    <a href="#" class="nav-item" data-section="groups"><i class="fas fa-user-friends"></i> Группы</a>
+
+    <div class="menu-category">Контент</div>
+    <a href="#" class="nav-item" data-section="locations"><i class="fas fa-map-marker-alt"></i> Локации</a>
+    <a href="#" class="nav-item" data-section="location-types"><i class="fas fa-folder"></i> Типы локаций</a>
+    <a href="#" class="nav-item" data-section="photos"><i class="fas fa-images"></i> Архивные фото</a>
+
+    <div class="menu-category">Модерация</div>
+    <a href="#" class="nav-item" data-section="moderation-logs"><i class="fas fa-clipboard-list"></i> Журнал</a>
+    <a href="#" class="nav-item" data-section="moderation-statuses"><i class="fas fa-tag"></i> Статусы</a>
+
+    <div class="sidebar-footer">
+        <div class="theme-toggle" id="themeToggle">
+            <span id="themeLabel">Тема</span>
+            <i class="fas fa-sun sun"></i><i class="fas fa-moon moon"></i>
+        </div>
+        <a href="/" class="btn-back" style="margin-top: 12px; display: flex; justify-content: center;">
+            <i class="fas fa-arrow-left"></i> На карту
+        </a>
+    </div>
+</aside>
+
+<!-- Main Content -->
+<div class="content-wrapper">
+    <header class="top-bar">
+        <h2 class="page-title" id="pageTitle">Управление пользователями</h2>
+    </header>
+
+    <div class="main-scroll">
+        <div id="message" class="message"></div>
+        <div id="section-content">
+            <!-- Dynamic Content Here -->
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div class="modal" id="editUserModal">
+    <div class="modal-content" id="editUserContent"></div>
+</div>
+<div class="modal" id="formModal">
+    <div class="modal-content" id="modalContent"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // ========== THEME & UI HELPERS ==========
+    const themeToggle = document.getElementById('themeToggle');
+    const themeLabel = document.getElementById('themeLabel');
+    const html = document.documentElement;
+    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    
+    function setTheme(theme) {
+        html.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        themeLabel.textContent = theme === 'dark' ? 'Dark Mode' : 'Light Mode';
+    }
+    setTheme(savedTheme);
+    themeToggle.addEventListener('click', () => setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+    function showMessage(text, isError) {
+        const msg = document.getElementById('message');
+        msg.textContent = text;
+        msg.className = 'message ' + (isError ? 'error' : 'success');
+        msg.style.display = 'block';
+        setTimeout(() => msg.style.display = 'none', 4000);
+    }
+
+    function getCookie(name) {
+        let v = null;
+        if (document.cookie) document.cookie.split(';').forEach(c => { if(c.trim().startsWith(name+'=')) v = decodeURIComponent(c.split('=')[1]); });
+        return v;
+    }
+    const CSRF_TOKEN = getCookie('csrftoken');
+    const API_BASE = '/api/admin/';
+    let currentSection = 'users';
+
+    async function fetchJSON(url, options = {}) {
+        const resp = await fetch(url, {
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+            ...options
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+        return data.results || data;
+    }
+
+    // ========== SECTIONS LOGIC ==========
+    
+    // --- USERS ---
+    async function loadUsersWithRoles() {
+        document.getElementById('pageTitle').textContent = 'Управление пользователями';
+        const users = await fetchJSON('/api/admin/users/');
+        const roles = await fetchJSON('/api/admin/roles/');
+        const content = document.getElementById('section-content');
+        content.innerHTML = `
+            <div class="card">
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>ID</th><th>Логин</th><th>Email</th><th>Роль</th><th style="width:220px">Действия</th></tr></thead>
+                        <tbody>
+                            ${users.map(user => `
+                                <tr>
+                                    <td>${user.id}</td>
+                                    <td style="font-weight:500;color:var(--text-primary)">${user.username}</td>
+                                    <td>${user.email || '-'}</td>
+                                    <td>
+                                        <select class="form-control role-select" data-user-id="${user.id}" style="width:140px;padding:6px 8px;font-size:13px;">
+                                            ${roles.map(role => `<option value="${role.id}" ${user.role === role.id ? 'selected' : ''}>${role.name}</option>`).join('')}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-primary btn-sm" onclick="saveRole(${user.id})" style="margin-right:6px;">Save</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="openEditUserModalForm(${user.id}, '${user.username}', '${user.email || ''}', ${user.role})"><i class="fas fa-pen"></i></button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})"><i class="fas fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    async function saveRole(userId) {
+        const select = document.querySelector(`select[data-user-id="${userId}"]`);
+        try {
+            await fetchJSON(`/api/admin/users/${userId}/`, { method: 'PATCH', body: JSON.stringify({ role_id: parseInt(select.value) }) });
+            showMessage('Роль обновлена', false);
+        } catch (e) { showMessage('Ошибка: ' + e.message, true); }
+    }
+
+    async function deleteUser(userId) {
+        if (!confirm('Удалить пользователя?')) return;
+        try {
+            await fetch(`/api/admin/users/${userId}/`, { method: 'DELETE', headers: { 'X-CSRFToken': CSRF_TOKEN } });
+            showMessage('Пользователь удалён', false);
+            loadUsersWithRoles();
+        } catch (e) { showMessage('Ошибка удаления', true); }
+    }
+
+    function openEditUserModal(html) {
+        document.getElementById('editUserContent').innerHTML = html;
+        document.getElementById('editUserModal').style.display = 'flex';
+    }
+    function closeEditUserModal() { document.getElementById('editUserModal').style.display = 'none'; }
+
+    async function openEditUserModalForm(userId, username, email, roleId) {
+        const roles = await fetchJSON('/api/admin/roles/');
+        const html = `
+            <h3 style="margin-bottom:20px;">Редактировать пользователя</h3>
+            <input type="hidden" id="editUserId" value="${userId}">
+            <div class="form-group"><label>Логин</label><input class="form-control" id="editUsername" value="${username}"></div>
+            <div class="form-group"><label>Email</label><input class="form-control" id="editEmail" value="${email}"></div>
+            <div class="form-group"><label>Роль</label>
+                <select class="form-control" id="editRole">
+                    ${roles.map(role => `<option value="${role.id}" ${role.id === roleId ? 'selected' : ''}>${role.name}</option>`).join('')}
+                </select>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:24px; justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditUserModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveUserEdit()">Сохранить</button>
+            </div>
+        `;
+        openEditUserModal(html);
+    }
+
+    async function saveUserEdit() {
+        const userId = document.getElementById('editUserId').value;
+        const body = {
+            username: document.getElementById('editUsername').value,
+            email: document.getElementById('editEmail').value,
+            role_id: parseInt(document.getElementById('editRole').value)
+        };
+        try {
+            await fetchJSON(`/api/admin/users/${userId}/`, { method: 'PATCH', body: JSON.stringify(body) });
+            closeEditUserModal();
+            showMessage('Пользователь обновлён', false);
+            loadUsersWithRoles();
+        } catch (e) { showMessage('Ошибка: ' + e.message, true); }
+    }
+
+    // --- ROLES ---
+    async function loadRoles() {
+        document.getElementById('pageTitle').textContent = 'Справочник ролей';
+        const roles = await fetchJSON('/api/admin/roles/');
+        document.getElementById('section-content').innerHTML = `
+            <div class="roles-grid">
+                ${roles.map(role => `
+                    <div class="role-card">
+                        <h4>${role.name}</h4>
+                        <span>ID: ${role.id}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    // --- LOCATIONS ---
+    async function loadLocations() {
+        document.getElementById('pageTitle').textContent = 'Локации';
+        const items = await fetchJSON(`${API_BASE}locations/`);
+        const content = document.getElementById('section-content');
+        content.innerHTML = `
+            <div style="margin-bottom:20px;"><button class="btn btn-success" onclick="showLocationForm()"><i class="fas fa-plus"></i> Добавить локацию</button></div>
+            <div id="miniMap" class="mini-map-container"></div>
+            <div class="card">
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>Координаты</th><th style="width:120px">Действия</th></tr></thead>
+                        <tbody>
+                            ${items.map(item => {
+                                let coords = '—';
+                                if (item.coordinates?.coordinates) {
+                                    const [lon, lat] = item.coordinates.coordinates;
+                                    coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+                                }
+                                return `
+                                    <tr id="loc-row-${item.id}">
+                                        <td>${item.id}</td>
+                                        <td style="font-weight:500;color:var(--text-primary)">${item.name}</td>
+                                        <td>${item.location_type_name || '—'}</td>
+                                        <td style="font-family:monospace;font-size:12px;">${coords}</td>
+                                        <td>
+                                            <button class="btn btn-secondary btn-sm" onclick="showLocationForm(${item.id})"><i class="fas fa-pen"></i></button>
+                                            <button class="btn btn-danger btn-sm" onclick="deleteItem('locations', ${item.id})"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        initMiniMap(items);
+    }
+
+    let miniMapInstance = null;
+    function initMiniMap(items) {
+        if(miniMapInstance) miniMapInstance.remove();
+        miniMapInstance = L.map('miniMap').setView([57.6299, 39.8737], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(miniMapInstance);
+        items.forEach(item => {
+            if (item.coordinates?.coordinates) {
+                const [lon, lat] = item.coordinates.coordinates;
+                L.marker([lat, lon]).addTo(miniMapInstance)
+                    .bindPopup(`<b>${item.name}</b>`);
+            }
+        });
+    }
+
+    async function showLocationForm(id = null) {
+        const locationTypes = await fetchJSON('/api/admin/location-types/');
+        let locData = null;
+        let coords = [57.6299, 39.8737];
+        if (id) {
+            const items = await fetchJSON(`${API_BASE}locations/`);
+            locData = items.find(i => i.id == id);
+            if (locData?.coordinates?.coordinates) coords = [locData.coordinates.coordinates[1], locData.coordinates.coordinates[0]];
+        }
+
+        const html = `
+            <h3 style="margin-bottom:20px;">${id ? 'Редактировать' : 'Добавить'} локацию</h3>
+            <div class="form-group"><label>Название</label><input class="form-control" id="loc-name" value="${locData ? locData.name : ''}"></div>
+            <div class="form-group"><label>Тип</label>
+                <select class="form-control" id="loc-type">
+                    <option value="">— без типа —</option>
+                    ${locationTypes.map(t => `<option value="${t.id}" ${locData && locData.location_type === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Выберите точку на карте</label>
+                <div id="locMap" class="map-container"></div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;" id="coordsDisplay">Lat: ${coords[0].toFixed(5)}, Lon: ${coords[1].toFixed(5)}</div>
+                <input type="hidden" id="loc-lat" value="${coords[0]}">
+                <input type="hidden" id="loc-lon" value="${coords[1]}">
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveLocation(${id || 'null'})">Сохранить</button>
+            </div>
+        `;
+        openModal(html);
+        setTimeout(() => {
+            const map = L.map('locMap').setView(coords, 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(map);
+            let marker = L.marker(coords, { draggable: true }).addTo(map);
+            const update = (lat, lng) => {
+                document.getElementById('loc-lat').value = lat;
+                document.getElementById('loc-lon').value = lng;
+                document.getElementById('coordsDisplay').textContent = `Lat: ${lat.toFixed(5)}, Lon: ${lng.toFixed(5)}`;
+            };
+            map.on('click', e => { marker.setLatLng(e.latlng); update(e.latlng.lat, e.latlng.lng); });
+            marker.on('dragend', e => { const p = marker.getLatLng(); update(p.lat, p.lng); });
+        }, 100);
+    }
+
+    async function saveLocation(id) {
+        const body = {
+            name: document.getElementById('loc-name').value,
+            location_type: document.getElementById('loc-type').value || null,
+            coordinates: { type: 'Point', coordinates: [parseFloat(document.getElementById('loc-lon').value), parseFloat(document.getElementById('loc-lat').value)] }
+        };
+        const url = id ? `${API_BASE}locations/${id}/` : `${API_BASE}locations/`;
+        try {
+            await fetchJSON(url, { method: id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+            closeModal(); loadLocations(); showMessage('Локация сохранена', false);
+        } catch (e) { showMessage('Ошибка: ' + e.message, true); }
+    }
+
+    // --- GENERIC SECTIONS (Groups, Types, Logs, Statuses) ---
+    let currentSectionConfig = null;
+    async function loadGenericSection(endpoint, columns, fields, entityName) {
+        currentSectionConfig = { endpoint, columns, fields, entityName };
+        document.getElementById('pageTitle').textContent = entityName;
+        const items = await fetchJSON(`${API_BASE}${endpoint}/`);
+        document.getElementById('section-content').innerHTML = `
+            <div style="margin-bottom:20px;"><button class="btn btn-success" id="addBtn"><i class="fas fa-plus"></i> Добавить</button></div>
+            <div class="card">
+                <div class="table-container">
+                    <table>
+                        <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}<th style="width:100px">Действия</th></tr></thead>
+                        <tbody>
+                            ${items.map(item => `
+                                <tr>
+                                    ${columns.map(c => `<td>${item[c.key] ?? ''}</td>`).join('')}
+                                    <td>
+                                        <button class="btn btn-secondary btn-sm edit-btn" data-id="${item.id}"><i class="fas fa-pen"></i></button>
+                                        <button class="btn btn-danger btn-sm delete-btn" data-id="${item.id}"><i class="fas fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        document.getElementById('addBtn').onclick = () => showAddForm();
+        document.querySelectorAll('.edit-btn').forEach(b => b.onclick = () => showEditForm(b.dataset.id));
+        document.querySelectorAll('.delete-btn').forEach(b => b.onclick = () => deleteItem(endpoint, b.dataset.id));
+    }
+
+    function openModal(html) { document.getElementById('modalContent').innerHTML = html; document.getElementById('formModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('formModal').style.display = 'none'; }
+
+    async function showAddForm() {
+        const { fields, entityName } = currentSectionConfig;
+        openModal(`
+            <h3 style="margin-bottom:20px;">Добавить ${entityName}</h3>
+            ${fields.map(f => `<div class="form-group"><label>${f.label}</label><input class="form-control" id="field-${f.key}"></div>`).join('')}
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveForm(null)">Сохранить</button>
+            </div>
+        `);
+    }
+
+    async function showEditForm(id) {
+        const { endpoint, fields, entityName } = currentSectionConfig;
+        const items = await fetchJSON(`${API_BASE}${endpoint}/`);
+        const item = items.find(i => i.id == id);
+        if(!item) return;
+        openModal(`
+            <h3 style="margin-bottom:20px;">Редактировать ${entityName}</h3>
+            ${fields.map(f => `<div class="form-group"><label>${f.label}</label><input class="form-control" id="field-${f.key}" value="${item[f.key]||''}"></div>`).join('')}
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveForm(${id})">Сохранить</button>
+            </div>
+        `);
+    }
+
+    async function saveForm(id) {
+        const { endpoint, fields } = currentSectionConfig;
+        const body = {};
+        fields.forEach(f => { const i = document.getElementById(`field-${f.key}`); if(i) body[f.key] = i.value; });
+        try {
+            await fetchJSON(`${API_BASE}${endpoint}/${id ? id+'/' : ''}`, { method: id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+            closeModal(); loadCurrentSection(); showMessage('Сохранено', false);
+        } catch(e) { showMessage('Ошибка: '+e.message, true); }
+    }
+
+    async function deleteItem(endpoint, id) {
+        if(!confirm('Удалить?')) return;
+        try {
+            await fetch(`${API_BASE}${endpoint}/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': CSRF_TOKEN } });
+            loadCurrentSection(); showMessage('Удалено', false);
+        } catch(e) { showMessage('Ошибка', true); }
+    }
+
+    // --- PHOTOS ---
+    async function loadPhotos() {
+        document.getElementById('pageTitle').textContent = 'Архивные фотографии';
+        const photos = await fetchJSON(`${API_BASE}photos/`);
+        document.getElementById('section-content').innerHTML = `
+            <div style="margin-bottom:20px;"><button class="btn btn-success" id="addPhotoBtn"><i class="fas fa-plus"></i> Добавить фото</button></div>
+            <div class="card">
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>ID</th><th>Фото</th><th>Год</th><th>Локация</th><th>Описание</th><th style="width:100px">Действия</th></tr></thead>
+                        <tbody>
+                            ${photos.map(p => `
+                                <tr>
+                                    <td>${p.id}</td>
+                                    <td><img src="${p.image}" style="width:50px;height:35px;object-fit:cover;border-radius:4px;"></td>
+                                    <td>${p.year}</td>
+                                    <td>${p.location_name||'—'}</td>
+                                    <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.description||''}</td>
+                                    <td>
+                                        <button class="btn btn-secondary btn-sm" onclick="showPhotoForm(${p.id})"><i class="fas fa-pen"></i></button>
+                                        <button class="btn btn-danger btn-sm" onclick="deletePhoto(${p.id})"><i class="fas fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        document.getElementById('addPhotoBtn').onclick = () => showPhotoForm();
+    }
+
+    async function showPhotoForm(id = null) {
+        const locations = await fetchJSON('/api/admin/locations/');
+        let p = null;
+        if(id) { const ps = await fetchJSON(`${API_BASE}photos/`); p = ps.find(x=>x.id==id); }
+        
+        openModal(`
+            <h3 style="margin-bottom:20px;">${id?'Редактировать':'Добавить'} фото</h3>
+            ${p ? `<img src="${p.image}" style="max-height:150px;border-radius:8px;margin-bottom:15px;display:block;">` : ''}
+            <div class="form-group"><label>Файл ${id?'(оставьте пустым, если не меняете)':''}</label><input type="file" class="form-control" id="photoImage" accept="image/*"></div>
+            <div class="form-group"><label>Год</label><input type="number" class="form-control" id="photoYear" value="${p?p.year:new Date().getFullYear()}"></div>
+            <div class="form-group"><label>Азимут</label><input type="number" class="form-control" id="photoAzimuth" value="${p?p.azimuth:''}"></div>
+            <div class="form-group"><label>Описание</label><textarea class="form-control" id="photoDesc" rows="3">${p?p.description:''}</textarea></div>
+            <div class="form-group"><label>Локация</label>
+                <select class="form-control" id="photoLocation">
+                    <option value="">— выберите —</option>
+                    ${locations.map(l => `<option value="${l.id}" ${p&&p.location==l.id?'selected':''}>${l.name}</option>`).join('')}
+                </select>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="savePhoto(${id||'null'})">Сохранить</button>
+            </div>
+        `);
+    }
+
+    async function savePhoto(id) {
+        const fd = new FormData();
+        const img = document.getElementById('photoImage').files[0];
+        if(img) fd.append('image', img);
+        fd.append('year', document.getElementById('photoYear').value);
+        fd.append('azimuth', document.getElementById('photoAzimuth').value);
+        fd.append('description', document.getElementById('photoDesc').value);
+        fd.append('location', document.getElementById('photoLocation').value);
+
+        const url = id ? `${API_BASE}photos/${id}/` : `${API_BASE}photos/`;
+        try {
+            const resp = await fetch(url, { method: id?'PATCH':'POST', headers:{'X-CSRFToken':CSRF_TOKEN}, body:fd });
+            if(!resp.ok) throw new Error(await resp.text());
+            closeModal(); loadPhotos(); showMessage('Фото сохранено', false);
+        } catch(e) { showMessage('Ошибка: '+e.message, true); }
+    }
+
+    async function deletePhoto(id) {
+        if(!confirm('Удалить фото?')) return;
+        try {
+            await fetch(`${API_BASE}photos/${id}/`, { method:'DELETE', headers:{'X-CSRFToken':CSRF_TOKEN} });
+            loadPhotos(); showMessage('Удалено', false);
+        } catch(e) { showMessage('Ошибка', true); }
+    }
+
+    // --- NAVIGATION ---
+    function loadCurrentSection() {
+        const map = {
+            'users': loadUsersWithRoles,
+            'roles': loadRoles,
+            'groups': () => loadGenericSection('groups', [{key:'name',label:'Название'}], [{key:'name',label:'Название'}], 'Группа'),
+            'locations': loadLocations,
+            'location-types': () => loadGenericSection('location-types', [{key:'name',label:'Название'}], [{key:'name',label:'Название'}], 'Тип локации'),
+            'photos': loadPhotos,
+            'moderation-logs': () => loadGenericSection('moderation-logs', [{key:'id',label:'ID'},{key:'review_date',label:'Дата'},{key:'comment',label:'Комментарий'}], [], 'Журнал'),
+            'moderation-statuses': () => loadGenericSection('moderation-statuses', [{key:'name',label:'Статус'}], [{key:'name',label:'Статус'}], 'Статусы')
+        };
+        if(map[currentSection]) map[currentSection]();
+    }
+
+    document.querySelectorAll('.nav-item').forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            document.querySelectorAll('.nav-item').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            currentSection = link.dataset.section;
+            loadCurrentSection();
+        });
+    });
+
+    // Init
+    loadCurrentSection();
+</script>
+</body>
+</html>
