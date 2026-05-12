@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
         /* ========== CSS VARIABLES (MUTED & ELEGANT) ========== */
@@ -430,6 +431,32 @@
         }
         @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
+                /* ========== LOCATION CARD HIGHLIGHT ========== */
+        .card.selected {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-bg), var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        .card.selected .card-header {
+            background: var(--accent-bg);
+            margin: -16px -16px 12px -16px;
+            padding: 12px 16px;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+        .loc-meta {
+            font-size: 11px; color: var(--text-muted);
+            display: flex; flex-direction: column; gap: 2px; margin-top: 4px;
+        }
+        .loc-meta span { display: flex; align-items: center; gap: 4px; }
+        .loc-coords {
+            font-family: monospace; font-size: 10px;
+            color: var(--text-secondary); background: var(--bg-secondary);
+            padding: 2px 6px; border-radius: 4px; margin-top: 8px;
+            display: inline-block;
+        }
+        
+        
+        
         /* Mobile */
         @media (max-width: 768px) {
             body { flex-direction: column; height: auto; overflow: auto; }
@@ -453,10 +480,13 @@
         
         <nav class="nav-menu">
             <div class="nav-item active" onclick="switchTab('pending')">
-                <i class="fas fa-layer-group"></i> На проверке
+                <i class="fas fa-image"></i> Фото
+            </div>
+            <div class="nav-item" onclick="switchTab('locations')">
+                <i class="fas fa-map-marker-alt"></i> Локации
             </div>
             <div class="nav-item" onclick="switchTab('log')">
-                <i class="fas fa-history"></i> Журнал действий
+                <i class="fas fa-history"></i> Журнал
             </div>
         </nav>
 
@@ -510,6 +540,15 @@
                     </div>
                 </div>
 
+                                <!-- Map for Photos -->
+                <!-- Кнопка и контейнер карты -->
+<div style="margin-bottom: 20px;">
+    <button class="btn btn-secondary" onclick="toggleMap()" id="mapBtn" style="width:auto; padding:8px 16px;">
+        <i class="fas fa-map"></i> <span id="mapToggleText">Показать карту</span>
+    </button>
+</div>
+<div id="pendingPhotosMap" style="width:100%; height:350px; border-radius:12px; border:1px solid var(--border-color); display:none; margin-bottom:20px; z-index: 1;"></div>
+
                 <!-- Filters -->
                 <div class="filters-row">
                     <div class="input-group">
@@ -534,6 +573,18 @@
                     <i class="fas fa-clipboard-check"></i>
                     <h3>Всё чисто!</h3>
                     <p>Нет фотографий, ожидающих проверки</p>
+                </div>
+            </section>
+
+            <!-- SECTION: LOCATIONS -->
+            <section id="locations" class="section">
+                <div id="moderationMiniMap" style="width:100%; height:350px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border-color);"></div>
+                <div class="grid" id="locationsContainer">
+                    <div class="card"><div class="skeleton" style="height:120px;"></div></div>
+                </div>
+                <div class="empty-state" id="emptyLocations" style="display:none;">
+                    <i class="fas fa-map-pin"></i>
+                    <h3>Нет локаций на проверке</h3>
                 </div>
             </section>
 
@@ -605,7 +656,9 @@
     setTheme(savedTheme);
     themeToggle.addEventListener('click', () => setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
 
-    // --- TABS LOGIC ---
+     let moderationMap = null;
+    let moderationMarkers = [];
+
     function switchTab(tabId) {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         event.currentTarget.classList.add('active');
@@ -614,34 +667,193 @@
         document.getElementById(tabId).classList.add('active');
 
         const title = document.getElementById('pageTitle');
-        title.textContent = tabId === 'pending' ? 'Фотографии на проверке' : 'Журнал модерации';
+        if (tabId === 'pending') title.textContent = 'Фотографии на проверке';
+        else if (tabId === 'locations') title.textContent = 'Локации на проверке';
+        else if (tabId === 'log') title.textContent = 'Журнал модерации';
 
         if (tabId === 'log' && !window.logLoaded) {
             loadLog();
             window.logLoaded = true;
         }
+        if (tabId === 'locations') {
+            if (!moderationMap) {
+                initModerationMap();
+            }
+            loadPendingLocations();
+            setTimeout(() => { if (moderationMap) moderationMap.invalidateSize(); }, 100);
+        }
+    }
+
+    function initModerationMap() {
+        moderationMap = L.map('moderationMiniMap').setView([57.6299, 39.8737], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(moderationMap);
+    }
+
+            async function loadPendingLocations() {
+        try {
+            const data = await fetchJSON('/api/moderation/locations/');
+            const locs = Array.isArray(data) ? data : (data.results || []);
+            const container = document.getElementById('locationsContainer');
+            const empty = document.getElementById('emptyLocations');
+
+            // Очищаем маркеры
+            if (moderationMap && moderationMarkers.length) {
+                moderationMarkers.forEach(m => moderationMap.removeLayer(m));
+                moderationMarkers = [];
+            }
+
+            if (locs.length === 0) {
+                container.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+
+            // Рендерим карточки (адаптировано под твой API)
+            container.innerHTML = locs.map(loc => {
+                const coords = loc.coordinates?.coordinates 
+                    ? `${loc.coordinates.coordinates[1].toFixed(5)}, ${loc.coordinates.coordinates[0].toFixed(5)}` 
+                    : '—';
+                const created = formatDate(loc.created_at);
+                // location_type может быть null или ID — покажем как есть
+                const locType = loc.location_type 
+                    ? (typeof loc.location_type === 'object' ? loc.location_type.name : `ID: ${loc.location_type}`)
+                    : 'не указан';
+                
+                return `
+                <article class="card" id="loc-card-${loc.id}" data-loc-id="${loc.id}">
+                    <div class="card-body">
+                        <div class="card-header">
+                            <span class="year-badge">${loc.name}</span>
+                            <span class="loc-name">ID: ${loc.id}</span>
+                        </div>
+                        <p class="desc" style="font-size:13px;margin:8px 0;">
+                            <i class="fas fa-tag"></i> Тип: ${locType}
+                        </p>
+                        <div class="loc-meta">
+                            <span><i class="fas fa-clock"></i> Создана: ${created}</span>
+                            <span class="loc-coords"><i class="fas fa-map-pin"></i> ${coords}</span>
+                        </div>
+                        <div class="actions" style="margin-top:12px;">
+                            <button class="btn btn-approve" onclick="approveLocation(${loc.id})">
+                                <i class="fas fa-check"></i> Одобрить
+                            </button>
+                            <button class="btn btn-reject" onclick="rejectLocation(${loc.id})">
+                                <i class="fas fa-times"></i> Отклонить
+                            </button>
+                        </div>
+                    </div>
+                </article>
+            `}).join('');
+
+            // Добавляем маркеры на карту с обработчиками
+            const bounds = [];
+            locs.forEach(loc => {
+                if (loc.coordinates?.coordinates) {
+                    const [lon, lat] = loc.coordinates.coordinates;
+                    bounds.push([lat, lon]);
+                    
+                    const marker = L.marker([lat, lon], {
+                        icon: L.divIcon({
+                            className: 'custom-marker',
+                            html: `<div style="background:var(--warning);color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);">${loc.id}</div>`,
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        })
+                    }).addTo(moderationMap);
+                    
+                    marker.bindPopup(`<b>${loc.name}</b><br><small>ID: ${loc.id}</small>`);
+                    
+                    // Клик по маркеру → подсветка карточки
+                    marker.on('click', () => {
+                        highlightLocation(loc.id);
+                        const card = document.getElementById(`loc-card-${loc.id}`);
+                        if (card) {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                    
+                    // Сохраняем ссылку на маркер для обратного поиска
+                    marker.locId = loc.id;
+                    moderationMarkers.push(marker);
+                }
+            });
+            
+            if (bounds.length) {
+                moderationMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+            }
+
+            // Добавляем обработчики кликов по карточкам
+            document.querySelectorAll('.card[data-loc-id]').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    const locId = parseInt(card.dataset.locId);
+                    highlightLocation(locId);
+                    const marker = moderationMarkers.find(m => m.locId === locId);
+                    if (marker) {
+                        moderationMap.flyTo(marker.getLatLng(), 16, { duration: 1 });
+                        setTimeout(() => marker.openPopup(), 1000);
+                    }
+                });
+            });
+
+        } catch(e) {
+            document.getElementById('locationsContainer').innerHTML = `<div class="empty-state">Ошибка: ${e.message}</div>`;
+        }
+    }
+
+    async function approveLocation(id) {
+        try {
+            await fetchJSON(`/api/moderation/locations/${id}/approve/`, { method: 'POST' });
+            showToast('Локация одобрена', 'success');
+            loadPendingLocations();
+        } catch(e) { showToast(e.message, 'error'); }
+    }
+
+    async function rejectLocation(id) {
+        if (!confirm('Удалить локацию безвозвратно?')) return;
+        try {
+            await fetchJSON(`/api/moderation/locations/${id}/reject/`, { method: 'POST' });
+            showToast('Локация удалена', 'success');
+            loadPendingLocations();
+        } catch(e) { showToast(e.message, 'error'); }
     }
 
     // --- API HELPERS ---
+
+        // Подсветка карточки и маркера по ID локации
+    function highlightLocation(locId) {
+        // Убираем выделение со всех
+        document.querySelectorAll('.card.selected').forEach(c => c.classList.remove('selected'));
+        
+        // Подсвечиваем нужную карточку
+        const card = document.getElementById(`loc-card-${locId}`);
+        if (card) {
+            card.classList.add('selected');
+            // Плавный скролл к карточке, если она не вьюпорте
+            const rect = card.getBoundingClientRect();
+            if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }
     function getCookie(name) {
         let v = null;
         if (document.cookie) document.cookie.split(';').forEach(c => { if(c.trim().startsWith(name+'=')) v = decodeURIComponent(c.split('=')[1]); });
         return v;
     }
     async function fetchJSON(url, opts = {}) {
-    // Собираем заголовки: стандартный CSRF + переданные
-    const headers = { 'X-CSRFToken': getCookie('csrftoken'), ...opts.headers };
-    
-    // Если есть тело и явно не указан Content-Type, ставим application/json
-    if (opts.body && !headers['Content-Type']) {
-        headers['Content-Type'] = 'application/json';
+        const headers = { 'X-CSRFToken': getCookie('csrftoken'), ...opts.headers };
+        if (opts.body && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
+        }
+        const r = await fetch(url, { ...opts, headers });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Ошибка');
+        return d;
     }
-    
-    const r = await fetch(url, { ...opts, headers });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Ошибка');
-    return d;
-}
     function showToast(msg, type='success') {
         const t = document.createElement('div');
         t.className = 'toast';
@@ -656,7 +868,7 @@
 
     // --- PENDING PHOTOS LOGIC ---
     let allPhotos = [];
-    const STATUS = { PENDING: 1, APPROVED: 2, REJECTED: 3 }; // Adjust based on your DB
+    const STATUS = { PENDING: 'На проверке', APPROVED: 'Опубликовано', REJECTED: 'Отклонено' };
 
     async function loadPending() {
         try {
@@ -670,16 +882,16 @@
     }
 
     function updateStats() {
-        document.getElementById('countPending').textContent = allPhotos.filter(p => p.status === STATUS.PENDING).length;
-        document.getElementById('countApproved').textContent = allPhotos.filter(p => p.status === STATUS.APPROVED).length;
-        document.getElementById('countRejected').textContent = allPhotos.filter(p => p.status === STATUS.REJECTED).length;
+        document.getElementById('countPending').textContent = allPhotos.filter(p => p.status_name === STATUS.PENDING).length;
+        document.getElementById('countApproved').textContent = allPhotos.filter(p => p.status_name === STATUS.APPROVED).length;
+        document.getElementById('countRejected').textContent = allPhotos.filter(p => p.status_name === STATUS.REJECTED).length;
     }
 
-    function renderPending() {
+        function renderPending() {
         const search = document.getElementById('searchInput').value.toLowerCase();
         const sort = document.getElementById('sortFilter').value;
         
-        let list = allPhotos.filter(p => p.status === STATUS.PENDING);
+        let list = allPhotos.filter(p => p.status_name === STATUS.PENDING);
         if(search) list = list.filter(p => (p.description+p.location_name+p.owner_username).toLowerCase().includes(search));
         
         list.sort((a,b) => {
@@ -694,14 +906,19 @@
         if(list.length === 0) {
             container.innerHTML = '';
             empty.style.display = 'block';
+            // Очищаем карту
+            if (pendingPhotosMap) {
+                pendingPhotoMarkers.forEach(m => pendingPhotosMap.removeLayer(m));
+                pendingPhotoMarkers = [];
+            }
             return;
         }
         empty.style.display = 'none';
         
         container.innerHTML = list.map(p => `
-            <article class="card">
+            <article class="card" data-photo-id="${p.id}">
                 <div class="card-img-wrap">
-                    <img src="${p.image}" loading="lazy" alt="photo">
+                    <img src="${p.thumbnail || p.image}" loading="lazy" alt="photo">
                 </div>
                 <div class="card-body">
                     <div class="card-header">
@@ -725,6 +942,27 @@
                 </div>
             </article>
         `).join('');
+
+        // Добавляем обработчики кликов по карточкам
+        document.querySelectorAll('.card[data-photo-id]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('button') || e.target.closest('textarea')) return;
+                const photoId = parseInt(card.dataset.photoId);
+                highlightPhotoCard(photoId);
+                
+                // Если карта видна, ищем маркер
+                if (showMapVisible && pendingPhotosMap) {
+                    const marker = pendingPhotoMarkers.find(m => m.photoId === photoId);
+                    if (marker) {
+                        pendingPhotosMap.flyTo(marker.getLatLng(), 16, { duration: 1 });
+                        setTimeout(() => marker.openPopup(), 1000);
+                    }
+                }
+            });
+        });
+        
+        // Обновляем карту
+        setTimeout(() => updatePendingPhotosMap(), 100);
     }
 
     async function actionPhoto(id, act) {
@@ -788,14 +1026,151 @@
         `).join('');
     }
 
+        let pendingPhotosMap = null;
+    let pendingPhotoMarkers = [];
+    let showMapVisible = false;
+
+    let mapMarkersGroup = null; // Группа маркеров для удобной очистки
+    let locationCache = {};
+
+    // Показать/скрыть карту
+    function toggleMap() {
+        showMapVisible = !showMapVisible;
+        const mapDiv = document.getElementById('pendingPhotosMap');
+        const btnText = document.getElementById('mapToggleText');
+
+        if (showMapVisible) {
+            mapDiv.style.display = 'block';
+            btnText.textContent = 'Скрыть карту';
+            
+            // Инициализируем карту при первом открытии
+            if (!pendingPhotosMap) {
+                initPendingPhotosMap();
+            }
+            // Обязательно обновляем размер контейнера после display:block
+            setTimeout(() => {
+                pendingPhotosMap.invalidateSize();
+                updatePendingPhotosMap(); // Рисуем маркеры
+            }, 100);
+        } else {
+            mapDiv.style.display = 'none';
+            btnText.textContent = 'Показать карту';
+        }
+    }
+
+    // Инициализация карты
+    function initPendingPhotosMap() {
+        if (pendingPhotosMap) return; // Уже создана
+        
+        const mapDiv = document.getElementById('pendingPhotosMap');
+        if (!mapDiv) return;
+
+        pendingPhotosMap = L.map('pendingPhotosMap').setView([57.6299, 39.8737], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(pendingPhotosMap);
+
+        // Группа маркеров, чтобы легко удалять их все сразу
+        mapMarkersGroup = L.layerGroup().addTo(pendingPhotosMap);
+    }
+
+    async function loadLocationCoordinates() {
+        // Если уже загружали, не грузим снова
+        if (Object.keys(locationCache).length > 0) return;
+
+        try {
+            const data = await fetchJSON('/api/locations/');
+            // Поддержка разных форматов ответа (список или GeoJSON)
+            const locations = Array.isArray(data) ? data : (data.results?.features || data.features || []);
+
+            locations.forEach(loc => {
+                // Пытаемся достать ID
+                const props = loc.properties || loc;
+                const id = props.id || loc.id;
+                
+                // Пытаемся достать координаты
+                const geom = loc.geometry || { coordinates: loc.coordinates };
+                if (geom && geom.coordinates) {
+                    const [lon, lat] = geom.coordinates;
+                    locationCache[id] = { lat, lng: lon, name: props.name };
+                }
+            });
+            console.log("✅ Координаты локаций загружены:", Object.keys(locationCache).length);
+        } catch (e) {
+            console.error("❌ Ошибка загрузки локаций для карты:", e);
+        }
+    }
+
+    // Обновить карту с маркерами фото
+    async function updatePendingPhotosMap() {
+        if (!pendingPhotosMap) return;
+
+        // Сначала убедимся, что у нас есть координаты
+        await loadLocationCoordinates();
+
+        // Очищаем старые маркеры
+        if (mapMarkersGroup) mapMarkersGroup.clearLayers();
+
+        const pendingPhotos = allPhotos.filter(p => p.status_name === STATUS.PENDING);
+        if (pendingPhotos.length === 0) return;
+
+        const bounds = [];
+
+        pendingPhotos.forEach(photo => {
+            const locId = photo.location;
+            const locData = locationCache[locId];
+
+            // Если у нас есть координаты для этой локации
+            if (locData) {
+                bounds.push([locData.lat, locData.lng]);
+
+                // Создаем маркер
+                const marker = L.marker([locData.lat, locData.lng]);
+
+                // Всплывающее окно
+                marker.bindPopup(`
+                    <div style="min-width:180px; text-align:center; padding:5px;">
+                        <b style="font-size:14px;">${locData.name || 'Локация #' + locId}</b><br>
+                        <img src="${photo.image}" style="width:100%; max-height:120px; object-fit:cover; border-radius:4px; margin: 5px 0;">
+                        <div style="font-weight:bold; color:var(--accent-primary);">${photo.year} г.</div>
+                        <div style="font-size:11px; color:#666;">Загрузил: ${photo.owner_username}</div>
+                    </div>
+                `);
+
+                // Клик по маркеру -> скролл к карточке
+                marker.on('click', () => {
+                    highlightPhotoCard(photo.id);
+                    const card = document.querySelector(`.card[data-photo-id="${photo.id}"]`);
+                    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+
+                mapMarkersGroup.addLayer(marker);
+            }
+        });
+
+        // Если есть точки, масштабируем карту, чтобы все влезли
+        if (bounds.length > 0) {
+            pendingPhotosMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+        }
+    }
+
+    // Подсветка карточки фото
+    function highlightPhotoCard(photoId) {
+        document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+        const card = document.querySelector(`.card[data-photo-id="${photoId}"]`);
+        if (card) card.classList.add('selected');
+    }
+
     // Listeners
     document.getElementById('searchInput').addEventListener('input', renderPending);
     document.getElementById('sortFilter').addEventListener('change', renderPending);
-    document.getElementById('logSearch').addEventListener('input', () => loadLog()); // Simple re-filter
+    document.getElementById('logSearch').addEventListener('input', () => loadLog());
     document.getElementById('logStatusFilter').addEventListener('change', () => loadLog());
 
     // Init
     loadPending();
 </script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>

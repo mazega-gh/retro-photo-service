@@ -33,6 +33,7 @@ class Location(models.Model):
         blank=True
     )
     created_at = gis_models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    is_approved = models.BooleanField(default=False, verbose_name='Одобрена')
     
     class Meta:
         verbose_name = 'Локация'

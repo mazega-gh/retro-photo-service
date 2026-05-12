@@ -379,6 +379,12 @@
         padding-right: 30px;
         }
         h3 { margin: 4px 0 8px; }
+        .photo-marker {
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        object-fit: cover;
+        }
     </style>
 </head>
 <body>
@@ -734,42 +740,42 @@
     }
 
     function renderAuth() {
-    if (currentUser) {
-        let adminButtonsHtml = '';
-        if (currentUser.is_admin) {
-            adminButtonsHtml += `<button class="btn-login" id="adminPanelBtn" style="margin-left: 8px; background: #fffbeb; color: #d97706; border: 1px solid #fcd34d;">⚙️ Админ</button>`;
-        }
-        if (currentUser.is_moderator) {
-            adminButtonsHtml += `<button class="btn-login" id="moderationPanelBtn" style="margin-left: 8px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">🛡️ Модерация</button>`;
-        }
+        if (currentUser) {
+            let adminButtonsHtml = '';
+            if (currentUser.is_admin) {
+                adminButtonsHtml += `<button class="btn-login" id="adminPanelBtn" title="Админ-панель" style="margin-left: 8px; background: #fffbeb; color: #d97706; border: 1px solid #fcd34d;"><i class="fas fa-cogs"></i> Админ</button>`;
+            }
+            if (currentUser.is_moderator) {
+                adminButtonsHtml += `<button class="btn-login" id="moderationPanelBtn" title="Панель модератора" style="margin-left: 8px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;"><i class="fas fa-shield-alt"></i> Модерация</button>`;
+            }
 
-        authContainer.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div class="user-info">
-                    <div class="user-avatar">${currentUser.username.charAt(0).toUpperCase()}</div>
-                    <button class="user-name" id="profileLink">${currentUser.username}</button>
-                    <button class="btn-logout" title="Выйти" id="logoutBtn"><i class="fas fa-sign-out-alt"></i></button>
-                </div>
-                ${adminButtonsHtml}
-            </div>`;
-        document.getElementById('profileLink').addEventListener('click', openProfileModal);
-        document.getElementById('logoutBtn').addEventListener('click', openLogoutConfirm);
+            authContainer.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="user-info">
+                        <div class="user-avatar">${currentUser.username.charAt(0).toUpperCase()}</div>
+                        <button class="user-name" id="profileLink">${currentUser.username}</button>
+                        <button class="btn-logout" title="Выйти" id="logoutBtn"><i class="fas fa-sign-out-alt"></i></button>
+                    </div>
+                    ${adminButtonsHtml}
+                </div>`;
+            document.getElementById('profileLink').addEventListener('click', openProfileModal);
+            document.getElementById('logoutBtn').addEventListener('click', openLogoutConfirm);
 
-        if (currentUser.is_admin) {
-            document.getElementById('adminPanelBtn').addEventListener('click', () => {
-                window.location.href = '/admin-panel/';
-            });
+            if (currentUser.is_admin) {
+                document.getElementById('adminPanelBtn').addEventListener('click', () => {
+                    window.location.href = '/admin-panel/';
+                });
+            }
+            if (currentUser.is_moderator) {
+                document.getElementById('moderationPanelBtn').addEventListener('click', () => {
+                    window.location.href = '/moderation/';
+                });
+            }
+        } else {
+            authContainer.innerHTML = '<button class="btn-login" id="loginBtn"><i class="fas fa-user"></i> Войти</button>';
+            document.getElementById('loginBtn').addEventListener('click', openAuthModal);
         }
-        if (currentUser.is_moderator) {
-            document.getElementById('moderationPanelBtn').addEventListener('click', () => {
-                window.location.href = '/moderation/';
-            });
-        }
-    } else {
-        authContainer.innerHTML = '<button class="btn-login" id="loginBtn"><i class="fas fa-user"></i> Войти</button>';
-        document.getElementById('loginBtn').addEventListener('click', openAuthModal);
     }
-}
 
     async function checkAuth() {
         try {
@@ -800,7 +806,7 @@
         try {
             const resp = await fetch('/api/login/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify({ username, password })
             });
             if (resp.ok) {
@@ -846,7 +852,7 @@
         try {
             const resp = await fetch('/api/register/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify({ username, email, password, password2 })
             });
             if (resp.ok) {
@@ -870,7 +876,7 @@
     });
 
     async function logout() {
-        await fetch('/api/logout/', { method: 'POST' });
+        await fetch('/api/logout/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
         currentUser = null;
         renderAuth();
         // После выхода сбрасываем загруженные фото до общего списка
@@ -1370,7 +1376,20 @@
                 const locName = props.name || "Без названия";
                 if (!locId) return;
 
-                const marker = L.marker(coordsLeaflet);
+                const oldestPhotoUrl = feature.properties?.oldest_photo_url;
+                let markerIcon;
+                if (oldestPhotoUrl) {
+                    markerIcon = L.icon({
+                        iconUrl: oldestPhotoUrl,
+                        iconSize: [48, 48],
+                        iconAnchor: [24, 48],
+                        popupAnchor: [0, -48],
+                        className: 'photo-marker'
+                    });
+                } else {
+                    markerIcon = new L.Icon.Default();
+                }
+                const marker = L.marker(coordsLeaflet, { icon: markerIcon });
                 markerCluster.addLayer(marker);
                 markersMap.set(String(locId), marker);
 

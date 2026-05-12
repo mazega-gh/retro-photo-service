@@ -16,12 +16,23 @@ class LocationSerializer(GeoFeatureModelSerializer):
         required=False,
         allow_null=True
     )
+    oldest_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Location
         geo_field = "coordinates"
         auto_bbox = True
-        fields = ['id', 'name', 'location_type', 'location_type_name']
+        fields = ['id', 'name', 'location_type', 'location_type_name', 'oldest_photo_url', 'is_approved']
+
+    def get_oldest_photo_url(self, obj):
+        # Ищем самую старую ОПУБЛИКОВАННУЮ фотографию для этой локации
+        oldest = obj.photos.filter(status__name='Опубликовано').order_by('year').first()
+        if oldest and oldest.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(oldest.image.url)
+            return oldest.image.url
+        return None
 
 
 class AdminLocationSerializer(serializers.ModelSerializer):

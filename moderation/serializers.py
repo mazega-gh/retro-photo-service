@@ -12,5 +12,5 @@ class ModerationLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ModerationLog
-        fields = ['id', 'photo', 'photo_info', 'moderator', 'moderator_name', 'review_date', 'comment']
+        fields = ['id', 'photo', 'photo_info', 'moderator', 'moderator_name', 'review_date', 'action', 'comment']
         read_only_fields = ['id', 'review_date']

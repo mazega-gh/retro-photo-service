@@ -1,20 +1,31 @@
-from rest_framework import viewsets
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
-from django.shortcuts import render
 from django.contrib.auth.decorators import user_passes_test
-from .models import ModerationStatus, ModerationLog
-from photos.models import RetroPhoto
-# Импортируем сериализатор фото, чтобы получить URL картинки
-from photos.serializers import RetroPhotoSerializer 
+from django.shortcuts import render
+from rest_framework import status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from accounts.views import IsAdminUser
-from .serializers import ModerationStatusSerializer, ModerationLogSerializer
+from photos.models import RetroPhoto
+from photos.serializers import RetroPhotoSerializer
+
+from .models import ModerationLog, ModerationStatus
+from .serializers import ModerationLogSerializer, ModerationStatusSerializer
+
+
+PENDING_STATUS = 'На проверке'
+PUBLISHED_STATUS = 'Опубликовано'
+REJECTED_STATUS = 'Отклонено'
 
 
 def is_moderator_or_admin(user):
     return user.is_authenticated and (user.is_moderator or user.is_admin)
+
+
+def get_or_create_status(name):
+    status_obj, _ = ModerationStatus.objects.get_or_create(name=name)
+    return status_obj
+
 
 @user_passes_test(is_moderator_or_admin)
 def moderation_page(request):
@@ -25,16 +36,11 @@ class ModerationPhotosAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not (request.user.is_moderator or request.user.is_admin):
-            return Response({'error': 'Доступ запрещён'}, status=403)
-        
-        # Получаем статус "На проверке"
-        try:
-            pending_status = ModerationStatus.objects.get(name="На проверке")
-        except ModerationStatus.DoesNotExist:
-            return Response([])
-            
-        photos = RetroPhoto.objects.filter(status=pending_status).select_related('location', 'owner')
+        if not is_moderator_or_admin(request.user):
+            return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        pending_status = get_or_create_status(PENDING_STATUS)
+        photos = RetroPhoto.objects.filter(status=pending_status).select_related('location', 'owner', 'status')
         serializer = RetroPhotoSerializer(photos, many=True)
         return Response(serializer.data)
 
@@ -43,22 +49,24 @@ class ApprovePhotoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_moderator or request.user.is_admin):
-            return Response({'error': 'Доступ запрещён'}, status=403)
-        try:
-            photo = RetroPhoto.objects.get(pk=pk, status__name="На проверке")
-        except RetroPhoto.DoesNotExist:
-            return Response({'error': 'Фото не найдено или уже обработано'}, status=404)
+        if not is_moderator_or_admin(request.user):
+            return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
 
-        approved_status = ModerationStatus.objects.get(name="Опубликовано")
-        photo.status = approved_status
-        photo.save()
+        pending_status = get_or_create_status(PENDING_STATUS)
+        try:
+            photo = RetroPhoto.objects.get(pk=pk, status=pending_status)
+        except RetroPhoto.DoesNotExist:
+            return Response({'error': 'Photo not found or already moderated'}, status=status.HTTP_404_NOT_FOUND)
+
+        photo.status = get_or_create_status(PUBLISHED_STATUS)
+        photo.save(update_fields=['status', 'updated_at'])
 
         comment = request.data.get('comment', '')
         ModerationLog.objects.create(
             photo=photo,
             moderator=request.user,
-            comment=comment or 'Одобрено'
+            action='approved',
+            comment=comment or 'Approved',
         )
         return Response({'status': 'approved'})
 
@@ -67,56 +75,53 @@ class RejectPhotoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_moderator or request.user.is_admin):
-            return Response({'error': 'Доступ запрещён'}, status=403)
-        try:
-            photo = RetroPhoto.objects.get(pk=pk, status__name="На проверке")
-        except RetroPhoto.DoesNotExist:
-            return Response({'error': 'Фото не найдено или уже обработано'}, status=404)
+        if not is_moderator_or_admin(request.user):
+            return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
 
-        rejected_status = ModerationStatus.objects.get(name="Отклонено")
-        photo.status = rejected_status
-        photo.save()
+        pending_status = get_or_create_status(PENDING_STATUS)
+        try:
+            photo = RetroPhoto.objects.get(pk=pk, status=pending_status)
+        except RetroPhoto.DoesNotExist:
+            return Response({'error': 'Photo not found or already moderated'}, status=status.HTTP_404_NOT_FOUND)
+
+        photo.status = get_or_create_status(REJECTED_STATUS)
+        photo.save(update_fields=['status', 'updated_at'])
 
         comment = request.data.get('comment', '')
         ModerationLog.objects.create(
             photo=photo,
             moderator=request.user,
-            comment=comment or 'Отклонено'
+            action='rejected',
+            comment=comment or 'Rejected',
         )
         return Response({'status': 'rejected'})
 
 
-# === НОВЫЙ КЛАСС ДЛЯ ЖУРНАЛА МОДЕРАЦИИ ===
 class ModerationLogAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not (request.user.is_moderator or request.user.is_admin):
-            return Response({'error': 'Доступ запрещён'}, status=403)
-        
-        # Берем последние 100 записей, сортируем по дате проверки
+        if not is_moderator_or_admin(request.user):
+            return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+
         logs = ModerationLog.objects.select_related('photo', 'moderator', 'photo__location').order_by('-review_date')[:100]
-        
         data = []
         for log in logs:
             photo = log.photo
-            # Формируем ответ вручную, чтобы фронтенду было удобно
             data.append({
                 'id': log.id,
                 'image': photo.image.url if photo.image else '',
-                'location_name': photo.location.name if photo.location else 'Неизвестно',
+                'location_name': photo.location.name if photo.location else 'Unknown',
                 'year': photo.year,
-                'action': 'approved' if 'Опубликовано' in str(photo.status) else 'rejected',
-                'moderator': log.moderator.username if log.moderator else 'Система',
+                'action': log.action or 'updated',
+                'moderator': log.moderator.username if log.moderator else 'System',
                 'reviewed_at': log.review_date.isoformat(),
-                'comment': log.comment
+                'comment': log.comment,
             })
-            
+
         return Response(data)
 
 
-# ViewSets для админ-панели (оставляем как было)
 class AdminModerationStatusViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = ModerationStatus.objects.all()
@@ -125,5 +130,5 @@ class AdminModerationStatusViewSet(viewsets.ModelViewSet):
 
 class AdminModerationLogViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = ModerationLog.objects.all()
+    queryset = ModerationLog.objects.select_related('photo', 'moderator')
     serializer_class = ModerationLogSerializer

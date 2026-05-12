@@ -1,7 +1,5 @@
 import logging
 from django.contrib.auth import authenticate, login, logout
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -34,21 +32,15 @@ class CurrentUserView(APIView):
         })
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     """
     Вход в систему.
-    Никакой проверки CSRF, никакой сессионной аутентификации внутри DRF.
+    Uses Django session authentication and CSRF protection.
     """
     authentication_classes = []
     permission_classes = []
 
     def post(self, request):
-        # Сначала логируем сырые данные запроса
-        logger.info(f"LOGIN RAW BODY: {request.body}")
-        logger.info(f"LOGIN CONTENT TYPE: {request.content_type}")
-
-        # Потом извлекаем переменные
         username = request.data.get('username')
         password = request.data.get('password')
 
@@ -68,6 +60,9 @@ class LoginView(APIView):
                 'username': user.username,
                 'email': user.email,
                 'id': user.id,
+                'role': user.role.name if user.role else None,
+                'is_admin': user.is_admin,
+                'is_moderator': user.is_moderator,
             })
         else:
             logger.warning(f"LOGIN FAILED: {username}")
@@ -77,7 +72,6 @@ class LoginView(APIView):
             )
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LogoutView(APIView):
     """Выход из системы"""
     authentication_classes = []
@@ -87,10 +81,9 @@ class LogoutView(APIView):
         logout(request)
         return Response({'detail': 'Вы вышли из системы'})
     
-@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     """
-    Регистрация нового пользователя (без CSRF).
+    Регистрация нового пользователя.
     """
     authentication_classes = []
     permission_classes = []
@@ -146,6 +139,9 @@ class RegisterView(APIView):
             'username': user.username,
             'email': user.email,
             'id': user.id,
+            'role': user.role.name if user.role else None,
+            'is_admin': user.is_admin,
+            'is_moderator': user.is_moderator,
         }, status=status.HTTP_201_CREATED)
     
 

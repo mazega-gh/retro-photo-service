@@ -71,8 +71,8 @@ class LocationTypeAdmin(admin.ModelAdmin):
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     # 1. Колонки в общем списке (здесь координаты видны сразу)
-    list_display = ['id', 'name', 'location_type', 'get_latitude', 'get_longitude', 'created_at']
-    list_filter = ['location_type']
+    list_display = ['id', 'name', 'location_type', 'get_latitude', 'get_longitude', 'created_at', 'is_approved']
+    list_filter = ['location_type', 'is_approved']
     search_fields = ['name']
     
     # 2. Поля, которые нельзя редактировать (вывод координат)
