@@ -1,10 +1,13 @@
-from rest_framework import filters, permissions, serializers, viewsets
+from rest_framework import filters, permissions, serializers, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from accounts.views import IsAdminUser
 from moderation.models import ModerationLog, ModerationStatus
 
 from .models import RetroPhoto
 from .serializers import RetroPhotoSerializer
+from .smart_matching import find_best_comparison_pair
 
 
 PENDING_STATUS = 'На проверке'
@@ -44,6 +47,59 @@ class RetroPhotoViewSet(viewsets.ModelViewSet):
             action='uploaded',
             comment='Photo uploaded and waiting for moderation.',
         )
+
+    @action(detail=False, methods=['get'], url_path='smart-compare')
+    def smart_compare(self, request):
+        location_id = request.query_params.get('location')
+        if not location_id:
+            return Response(
+                {'detail': 'Location query parameter is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        photos = list(
+            self.get_queryset()
+            .filter(location_id=location_id)
+            .order_by('year', 'id')
+        )
+        if len(photos) < 2:
+            return Response(
+                {'detail': 'At least two published photos are required for comparison.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        match = find_best_comparison_pair(photos)
+        if not match:
+            return Response(
+                {'detail': 'Could not build a comparison pair.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer_context = self.get_serializer_context()
+        return Response({
+            'old_photo': RetroPhotoSerializer(match.old_photo, context=serializer_context).data,
+            'new_photo': RetroPhotoSerializer(match.new_photo, context=serializer_context).data,
+            'score': match.score,
+            'quality_label': match.quality_label,
+            'metrics': {
+                'visual_similarity': match.visual_similarity,
+                'temporal_score': match.temporal_score,
+                'azimuth_score': match.azimuth_score,
+                'candidates_analyzed': match.candidates_analyzed,
+            },
+            'algorithm': {
+                'name': 'Intelligent historical photo matching',
+                'features': [
+                    'perceptual hashes',
+                    'luminance grid',
+                    'edge structure',
+                    'color histogram',
+                    'aspect ratio',
+                    'shooting year',
+                    'azimuth',
+                ],
+            },
+        })
 
 
 class AdminRetroPhotoViewSet(viewsets.ModelViewSet):

@@ -66,9 +66,16 @@ class ModerationLocationsAPIView(APIView):
     def get(self, request):
         if not (request.user.is_moderator or request.user.is_admin):
             return Response({'error': 'Access denied'}, status=403)
-        locations = Location.objects.filter(is_approved=False)
-        serializer = AdminLocationSerializer(locations, many=True, context={'request': request})
-        return Response(serializer.data)
+        pending_locations = Location.objects.filter(is_approved=False)
+        serializer = AdminLocationSerializer(pending_locations, many=True, context={'request': request})
+        return Response({
+            'results': serializer.data,
+            'stats': {
+                'total': Location.objects.count(),
+                'pending': pending_locations.count(),
+                'approved': Location.objects.filter(is_approved=True).count(),
+            },
+        })
 
 
 class ApproveLocationAPIView(APIView):

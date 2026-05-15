@@ -9,6 +9,7 @@ moderation workflow, role-based access, and a "then and now" comparison view.
 - Location storage with PostGIS `PointField` coordinates.
 - Archive photo upload with year, description, location, and optional azimuth.
 - Public API exposes only published photos.
+- Intelligent "then and now" pair selection for the comparison slider.
 - Moderation queue for approving and rejecting user uploads.
 - Admin panel for users, roles, locations, photos, statuses, and logs.
 - Leaflet marker clustering for dense location areas.
@@ -22,6 +23,32 @@ moderation workflow, role-based access, and a "then and now" comparison view.
 - Leaflet and Leaflet.markercluster
 - Pillow for image handling
 - drf-spectacular for API documentation
+
+## Intelligent Photo Matching
+
+The comparison slider does not simply take the oldest and newest photos anymore.
+For a selected location the backend analyzes every published photo pair and
+selects the strongest old/new match.
+
+Endpoint:
+
+```http
+GET /api/photos/smart-compare/?location=<location_id>
+```
+
+The algorithm extracts compact visual descriptors with Pillow:
+
+- perceptual average hash and difference hash;
+- luminance grid for composition similarity;
+- edge grid for perspective and object contours;
+- RGB color histogram;
+- aspect ratio, brightness, and contrast;
+- metadata signals: year distance and shooting azimuth.
+
+Each candidate pair receives a weighted score. The frontend shows the selected
+pair in the existing slider and displays the AI score, number of analyzed pairs,
+visual similarity, and azimuth score. If analysis is unavailable, the interface
+falls back to a chronological pair so the user always gets a comparison.
 
 ## Local Setup
 

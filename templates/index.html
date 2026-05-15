@@ -105,14 +105,23 @@
 
         /* ========== SIDEBAR ========== */
         .sidebar {
-            position: fixed; top: 0; left: 0; width: 360px; height: 100vh;
+            position: fixed; top: 0; left: 0; width: clamp(320px, var(--sidebar-width, 360px), 760px); height: 100vh;
             background: var(--bg-primary);
             box-shadow: 4px 0 24px rgba(0,0,0,0.05);
             z-index: 1001; display: flex; flex-direction: column;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border-right: 1px solid var(--border-color);
         }
-        .sidebar.hidden { transform: translateX(-360px); }
+        .sidebar.hidden { transform: translateX(calc(-1 * clamp(320px, var(--sidebar-width, 360px), 760px))); }
+        .sidebar-resizer {
+            position: absolute; top: 0; right: -5px; width: 10px; height: 100%;
+            cursor: ew-resize; z-index: 1003;
+        }
+        .sidebar-resizer::after {
+            content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px;
+            background: transparent; transition: background 0.2s;
+        }
+        .sidebar-resizer:hover::after { background: var(--accent-primary); }
         
         .sidebar-toggle {
             position: absolute; top: 20px; right: -40px;
@@ -129,8 +138,9 @@
         .sidebar-content {
             padding: 20px;
             flex: 1; /* Занимает все свободное место */
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+            align-content: start;
             gap: 15px;
             height: 100%; /* Важно: растягиваем на всю высоту родителя */
             overflow: hidden; /* Скрываем вылезающее содержимое */
@@ -193,7 +203,7 @@
         }
         .photo-card img {
             width: 100%;
-            height: 200px; /* Фиксированная высота, чтобы все были одинаковые */
+            height: 150px; /* Фиксированная высота, чтобы все были одинаковые */
             object-fit: cover; /* Обрезает лишнее, сохраняя пропорции */
             display: block;
         }
@@ -338,6 +348,149 @@
         .popup-year { font-weight: bold; font-size: 13px; color: var(--accent-primary); margin-top: 3px; }
         .popup-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
+        .location-photos-modal .modal-box {
+            width: min(920px, 94vw);
+            max-height: 88vh;
+            padding: 0;
+            overflow: hidden;
+        }
+        .location-photos-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .location-photos-title { margin: 0; font-size: 20px; }
+        .location-photos-subtitle { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+        .location-photos-grid {
+            padding: 20px 24px 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+            max-height: calc(88vh - 92px);
+            overflow-y: auto;
+        }
+        .location-photo-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+        .location-photo-card img {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            display: block;
+            background: #111;
+        }
+        .location-photo-info { padding: 12px; }
+        .location-photo-year {
+            color: var(--accent-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .location-photo-meta {
+            color: var(--text-secondary);
+            font-size: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            margin-top: 8px;
+        }
+        .modal-icon-close {
+            width: 34px;
+            height: 34px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 18px;
+        }
+
+        .photo-viewer-modal .modal-box {
+            width: min(1040px, 94vw);
+            max-height: 92vh;
+            padding: 0;
+            overflow: hidden;
+        }
+        .photo-viewer-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+            max-height: 92vh;
+        }
+        .photo-viewer-media {
+            position: relative;
+            background: #111827;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 520px;
+        }
+        .photo-viewer-media img {
+            max-width: 100%;
+            max-height: 86vh;
+            object-fit: contain;
+        }
+        .photo-viewer-side {
+            padding: 22px;
+            overflow-y: auto;
+            border-left: 1px solid var(--border-color);
+        }
+        .photo-viewer-year {
+            font-family: 'Inter', sans-serif;
+            color: var(--accent-primary);
+            font-size: 30px;
+            font-weight: 700;
+            margin: 0 0 8px;
+        }
+        .photo-viewer-desc {
+            color: var(--text-primary);
+            line-height: 1.55;
+            margin-bottom: 18px;
+        }
+        .photo-viewer-meta {
+            display: grid;
+            gap: 10px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 18px;
+        }
+        .photo-viewer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .photo-nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: rgba(255,255,255,0.92);
+            color: #111827;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .photo-nav-btn.prev { left: 14px; }
+        .photo-nav-btn.next { right: 14px; }
+        .photo-viewer-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            z-index: 2;
+        }
+        @media (max-width: 760px) {
+            .photo-viewer-layout { grid-template-columns: 1fr; }
+            .photo-viewer-media { min-height: 320px; }
+            .photo-viewer-side { border-left: none; border-top: 1px solid var(--border-color); }
+        }
+
         .compare-overlay {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.9); z-index: 3000;
@@ -368,6 +521,18 @@
         }
         .compare-info { color: white; margin-top: 16px; font-size: 16px; font-weight: 500; }
         .compare-year { margin: 0 15px; }
+        .compare-ai-info {
+            color: rgba(255,255,255,0.82);
+            margin-top: 8px;
+            font-size: 13px;
+            text-align: center;
+            max-width: min(900px, 86vw);
+            line-height: 1.5;
+        }
+        .compare-ai-score {
+            color: #a7f3d0;
+            font-weight: 700;
+        }
         .filter-select {
         -webkit-appearance: none;
         -moz-appearance: none;
@@ -403,6 +568,7 @@
 <!-- Боковая панель -->
 <div class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    <div class="sidebar-resizer" id="sidebarResizer"></div>
     <div class="sidebar-content">
         <div class="sidebar-header"><i class="fas fa-camera-retro"></i> РетроФото</div>
         
@@ -528,6 +694,23 @@
     </div>
 </div>
 
+<div class="modal-overlay location-photos-modal" id="locationPhotosModal">
+    <div class="modal-box">
+        <div class="location-photos-header">
+            <div>
+                <h3 class="location-photos-title" id="locationPhotosTitle">Фотографии локации</h3>
+                <div class="location-photos-subtitle" id="locationPhotosSubtitle"></div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn btn-secondary" id="downloadLocationPhotosBtn" style="display:none;">Скачать архив фото</button>
+            <button class="btn-compare" id="compareLocationBtn" style="display:none;" onclick="openCompareFromModal()">⇔ Сравнить</button>
+            <button class="modal-icon-close" onclick="closeLocationPhotosModal()">&times;</button>
+            </div>
+        </div>
+        <div class="location-photos-grid" id="locationPhotosGrid"></div>
+    </div>
+</div>
+
 <div class="compare-overlay" id="compareOverlay">
     <button class="compare-close" id="compareClose">&times;</button>
     <div class="compare-container" id="compareContainer">
@@ -540,6 +723,7 @@
         <span>↔</span>
         <span class="compare-year" id="compareYearNew"></span>
     </div>
+    <div class="compare-ai-info" id="compareAiInfo"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -551,6 +735,212 @@
     const photosCache = {};
     const photosDataCache = {};
     let currentUser = null;  // будет объект или null
+
+    const locationPhotosModal = document.getElementById('locationPhotosModal');
+    const locationPhotosTitle = document.getElementById('locationPhotosTitle');
+    const locationPhotosSubtitle = document.getElementById('locationPhotosSubtitle');
+    const locationPhotosGrid = document.getElementById('locationPhotosGrid');
+    const downloadLocationPhotosBtn = document.getElementById('downloadLocationPhotosBtn');
+    let currentLocationPhotos = [];
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char]));
+    }
+
+    function safeFileName(value) {
+        return String(value || 'photo').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_').slice(0, 80);
+    }
+
+    async function downloadPhotoFile(photo) {
+        const response = await fetch(photo.image);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        link.href = url;
+        link.download = `${safeFileName(photo.location_name)}_${photo.year}_${photo.id}.${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    const crcTable = (() => {
+        const table = new Uint32Array(256);
+        for (let n = 0; n < 256; n++) {
+            let c = n;
+            for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+            table[n] = c >>> 0;
+        }
+        return table;
+    })();
+
+    function crc32(bytes) {
+        let crc = 0xffffffff;
+        for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+        return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function writeString(view, offset, text) {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    }
+
+    async function downloadPhotosZip(photos, archiveName) {
+        const encoder = new TextEncoder();
+        const files = [];
+        for (const photo of photos) {
+            const response = await fetch(photo.image);
+            const blob = await response.blob();
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+            files.push({
+                name: `${safeFileName(photo.location_name)}_${photo.year}_${photo.id}.${ext}`,
+                bytes,
+                crc: crc32(bytes),
+            });
+        }
+
+        const chunks = [];
+        const central = [];
+        let offset = 0;
+        files.forEach(file => {
+            const nameBytes = encoder.encode(file.name);
+            const local = new ArrayBuffer(30 + nameBytes.length);
+            const view = new DataView(local);
+            view.setUint32(0, 0x04034b50, true);
+            view.setUint16(4, 20, true);
+            view.setUint16(8, 0, true);
+            view.setUint32(14, file.crc, true);
+            view.setUint32(18, file.bytes.length, true);
+            view.setUint32(22, file.bytes.length, true);
+            view.setUint16(26, nameBytes.length, true);
+            new Uint8Array(local, 30).set(nameBytes);
+            chunks.push(new Uint8Array(local), file.bytes);
+
+            const centralHeader = new ArrayBuffer(46 + nameBytes.length);
+            const centralView = new DataView(centralHeader);
+            centralView.setUint32(0, 0x02014b50, true);
+            centralView.setUint16(4, 20, true);
+            centralView.setUint16(6, 20, true);
+            centralView.setUint32(16, file.crc, true);
+            centralView.setUint32(20, file.bytes.length, true);
+            centralView.setUint32(24, file.bytes.length, true);
+            centralView.setUint16(28, nameBytes.length, true);
+            centralView.setUint32(42, offset, true);
+            new Uint8Array(centralHeader, 46).set(nameBytes);
+            central.push(new Uint8Array(centralHeader));
+            offset += local.byteLength + file.bytes.length;
+        });
+
+        const centralSize = central.reduce((sum, chunk) => sum + chunk.length, 0);
+        const end = new ArrayBuffer(22);
+        const endView = new DataView(end);
+        endView.setUint32(0, 0x06054b50, true);
+        endView.setUint16(8, files.length, true);
+        endView.setUint16(10, files.length, true);
+        endView.setUint32(12, centralSize, true);
+        endView.setUint32(16, offset, true);
+
+        const zipBlob = new Blob([...chunks, ...central, new Uint8Array(end)], { type: 'application/zip' });
+        const url = URL.createObjectURL(zipBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = safeFileName(archiveName || 'photos.zip').replace(/_zip$/, '.zip');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    async function fetchAllResults(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Не удалось загрузить данные');
+        const data = await response.json();
+        if (!data || !Array.isArray(data.results)) return Array.isArray(data) ? data : (data.results || []);
+        let results = [...data.results];
+        let nextUrl = data.next;
+        while (nextUrl) {
+            const nextResponse = await fetch(nextUrl);
+            if (!nextResponse.ok) throw new Error('Не удалось загрузить следующую страницу');
+            const nextData = await nextResponse.json();
+            results = results.concat(nextData.results || []);
+            nextUrl = nextData.next;
+        }
+        return results;
+    }
+
+    async function openLocationPhotosModal(locId, locName) {
+        locationPhotosTitle.textContent = locName || 'Фотографии локации';
+        locationPhotosSubtitle.textContent = 'Загрузка фотографий...';
+        locationPhotosGrid.innerHTML = '';
+        locationPhotosModal.style.display = 'flex';
+
+        try {
+            let photos = photosDataCache[locId];
+            if (!photos) {
+                photos = await fetchAllResults(`/api/photos/?location=${locId}`);
+                photosDataCache[locId] = photos;
+            }
+
+            const sorted = [...photos].sort((a, b) => Number(a.year || 0) - Number(b.year || 0));
+            currentLocationPhotos = sorted;
+            window.currentLocationPhotos = currentLocationPhotos;
+            downloadLocationPhotosBtn.style.display = sorted.length ? 'inline-flex' : 'none';
+            downloadLocationPhotosBtn.onclick = () => downloadPhotosZip(sorted, `${locName || 'location'}-photos.zip`);
+            
+            const compareLocationBtn = document.getElementById('compareLocationBtn');
+            if (compareLocationBtn) {
+                compareLocationBtn.style.display = sorted.length >= 2 ? 'inline-flex' : 'none';
+                compareLocationBtn.onclick = () => openCompare(locId, locName);
+            }
+
+            locationPhotosSubtitle.textContent = sorted.length ? `Всего фотографий: ${sorted.length}` : 'Опубликованных фотографий пока нет';
+            locationPhotosGrid.innerHTML = sorted.length ? sorted.map(photo => `
+                <article class="location-photo-card" style="cursor:pointer;" onclick="showPhotoDetail(${photo.id}, window.currentLocationPhotos)">
+                    <img src="${photo.image}" alt="${escapeHtml(photo.description || 'Фото локации')}" loading="lazy">
+                    <div class="location-photo-info">
+                        <div class="location-photo-year">${escapeHtml(photo.year)}</div>
+                        <div>${escapeHtml(photo.description || 'Описание не добавлено')}</div>
+                        <div class="location-photo-meta">
+                            <span><i class="fas fa-map-marker-alt"></i> ${escapeHtml(photo.location_name || locName || '')}</span>
+                            <span><i class="fas fa-compass"></i> ${photo.azimuth == null ? 'азимут не указан' : `${escapeHtml(photo.azimuth)}°`}</span>
+                            <span><i class="fas fa-user"></i> ${escapeHtml(photo.owner_username || 'аноним')}</span>
+                            <span><i class="fas fa-tag"></i> ${escapeHtml(photo.status_name || '')}</span>
+                        </div>
+                    </div>
+                </article>
+            `).join('') : `<div class="no-photos">Нет опубликованных фотографий</div>`;
+        } catch (error) {
+            currentLocationPhotos = [];
+            window.currentLocationPhotos = currentLocationPhotos;
+            downloadLocationPhotosBtn.style.display = 'none';
+            locationPhotosSubtitle.textContent = 'Ошибка загрузки';
+            locationPhotosGrid.innerHTML = `<div class="no-photos">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    function closeLocationPhotosModal() {
+        locationPhotosModal.style.display = 'none';
+    }
+
+    function openCompareFromModal() {
+        const locId = currentLocationPhotos[0]?.location;
+        const locName = locationPhotosTitle.textContent;
+        if (locId) {
+            closeLocationPhotosModal();
+            openCompare(locId, locName);
+        }
+    }
+
+    locationPhotosModal.addEventListener('click', (event) => {
+        if (event.target === locationPhotosModal) closeLocationPhotosModal();
+    });
 
     const map = L.map('map').setView([57.6299, 39.8737], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1000,21 +1390,53 @@
     const compareSlider = document.getElementById('compareSlider');
     const compareYearOld = document.getElementById('compareYearOld');
     const compareYearNew = document.getElementById('compareYearNew');
+    const compareAiInfo = document.getElementById('compareAiInfo');
     let isDragging = false;
 
-    function openCompare(locId, locName) {
+    async function openCompare(locId, locName) {
         const photos = photosDataCache[locId];
         if (!photos || photos.length < 2) return;
-        const sorted = [...photos].sort((a, b) => a.year - b.year);
-        const oldest = sorted[0], newest = sorted[sorted.length - 1];
-        compareImgOld.src = oldest.image;
-        compareImgNew.src = newest.image;
-        compareYearOld.textContent = oldest.year;
-        compareYearNew.textContent = newest.year;
+
+        compareOverlay.style.display = 'flex';
+        compareAiInfo.textContent = 'Smart photo matching is analyzing all candidate pairs...';
+        resetCompareSlider();
+
+        try {
+            const response = await fetch(`/api/photos/smart-compare/?location=${locId}`);
+            if (!response.ok) throw new Error('Smart compare API error');
+            const match = await response.json();
+            showComparePair(match.old_photo, match.new_photo, match);
+        } catch (error) {
+            console.warn('Smart compare fallback:', error);
+            const sorted = [...photos].sort((a, b) => a.year - b.year);
+            showComparePair(sorted[0], sorted[sorted.length - 1], null);
+        }
+    }
+
+    function showComparePair(oldPhoto, newPhoto, match) {
+        compareImgOld.src = oldPhoto.image;
+        compareImgNew.src = newPhoto.image;
+        compareYearOld.textContent = oldPhoto.year;
+        compareYearNew.textContent = newPhoto.year;
+        resetCompareSlider();
+
+        if (match) {
+            const metrics = match.metrics || {};
+            compareAiInfo.innerHTML = `
+                <span class="compare-ai-score">AI score: ${match.score}%</span>
+                · analyzed pairs: ${metrics.candidates_analyzed || 0}
+                · visual similarity: ${metrics.visual_similarity || 0}%
+                · azimuth: ${metrics.azimuth_score || 0}%
+            `;
+        } else {
+            compareAiInfo.textContent = 'Fallback chronological pair is shown because server-side analysis is unavailable.';
+        }
+    }
+
+    function resetCompareSlider() {
         compareImgOld.style.clipPath = 'inset(0 calc(100% - 50%) 0 0)';
         compareImgNew.style.clipPath = 'inset(0 0 0 50%)';
         compareSlider.style.left = '50%';
-        compareOverlay.style.display = 'flex';
     }
     function closeCompare() { compareOverlay.style.display = 'none'; }
     document.getElementById('compareClose').addEventListener('click', closeCompare);
@@ -1043,12 +1465,14 @@
     // ===== Боковая панель и поиск по локациям =====
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebarResizer = document.getElementById('sidebarResizer');
     const searchInput = document.getElementById('searchInput');
     const searchResults = document.getElementById('searchResults');
     const photosList = document.getElementById('photosList');
 
     let currentFilterLocId = null; // null = все фото
     let allPhotos = []; // кэш всех фото
+    let lastRenderedPhotos = [];
 
     const locationCoords = {};    // { locId: { lat, lng } }
     const locationMetaCache = {}; // { locId: { country, city } }
@@ -1060,6 +1484,28 @@
         sidebarToggle.innerHTML = sidebar.classList.contains('hidden') ? '<i class="fas fa-bars"></i>' : '<i class="fas fa-chevron-left"></i>';
         setTimeout(() => map.invalidateSize(), 300);
     });
+
+    sidebarResizer.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        document.body.style.cursor = 'ew-resize';
+        const resize = (moveEvent) => {
+            const width = Math.max(320, Math.min(760, moveEvent.clientX));
+            sidebar.style.setProperty('--sidebar-width', `${width}px`);
+            localStorage.setItem('sidebarWidth', String(width));
+        };
+        const stop = () => {
+            document.body.style.cursor = '';
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stop);
+        };
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stop);
+    });
+
+    const savedSidebarWidth = Number(localStorage.getItem('sidebarWidth'));
+    if (savedSidebarWidth) {
+        sidebar.style.setProperty('--sidebar-width', `${Math.max(320, Math.min(760, savedSidebarWidth))}px`);
+    }
 
     async function resolveLocationMeta(locId) {
         if (locationMetaCache[locId]) return locationMetaCache[locId];
@@ -1091,10 +1537,7 @@
     // Загрузка всех опубликованных фото
     async function loadAllPhotos() {
         try {
-            const resp = await fetch('/api/photos/');
-            if (!resp.ok) throw new Error('Ошибка загрузки');
-            const data = await resp.json();
-            allPhotos = Array.isArray(data) ? data : (data.results || []);
+            allPhotos = await fetchAllResults('/api/photos/');
             await enrichAndPopulateFilters(allPhotos);
             applyFilters();
         } catch (e) {
@@ -1244,9 +1687,11 @@
         return;
     }
     if (photos.length === 0) {
+        lastRenderedPhotos = [];
         photosList.innerHTML = '<div class="no-photos">Нет фотографий</div>';
         return;
     }
+    lastRenderedPhotos = photos;
     const html = photos.map(photo => {
         const meta = locationMetaCache[photo.location] || {};
         return `
@@ -1403,6 +1848,11 @@
                         </div>
                     </div>
                 `);
+
+                marker.on('click', () => {
+                    setTimeout(() => map.closePopup(), 0);
+                    openLocationPhotosModal(locId, locName);
+                });
 
                 marker.on('popupopen', async () => {
                     const container = document.getElementById(`popup-${locId}`);
@@ -1712,6 +2162,81 @@ function showPhotoDetail(photoId) {
     photoDetailModal.addEventListener('click', (e) => {
         if (e.target === photoDetailModal) closePhotoDetail();
     });
+
+// Улучшенный просмотрщик конкретной фотографии: стрелки, метаданные и скачивание.
+photoDetailModal.className = 'modal-overlay photo-viewer-modal';
+photoDetailModal.innerHTML = `
+    <div class="modal-box">
+        <div class="photo-viewer-layout">
+            <div class="photo-viewer-media">
+                <button class="modal-icon-close photo-viewer-close" onclick="closePhotoDetail()">&times;</button>
+                <button class="photo-nav-btn prev" id="detailPrevBtn" onclick="showAdjacentPhoto(-1)">‹</button>
+                <img id="detailImage" />
+                <button class="photo-nav-btn next" id="detailNextBtn" onclick="showAdjacentPhoto(1)">›</button>
+            </div>
+            <aside class="photo-viewer-side">
+                <h3 class="photo-viewer-year" id="detailYear"></h3>
+                <p class="photo-viewer-desc" id="detailDesc"></p>
+                <div class="photo-viewer-meta">
+                    <span id="detailLocation"></span>
+                    <span id="detailAzimuth"></span>
+                    <span id="detailAuthor"></span>
+                    <span id="detailStatus"></span>
+                    <span id="detailCreated"></span>
+                </div>
+                <div class="photo-viewer-actions">
+                    <button class="btn btn-primary" id="detailGoToMap">Показать на карте</button>
+                    <button class="btn btn-secondary" id="detailDownload">Скачать фото</button>
+                    <button class="btn-compare" id="detailCompareBtn" style="display:none;" onclick="openCompareFromDetail()">⇔ Сравнить</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+`;
+
+let currentDetailPhotos = [];
+let currentDetailIndex = 0;
+
+showPhotoDetail = function(photoId, collection = null) {
+    const source = Array.isArray(collection) && collection.length ? collection : (lastRenderedPhotos.length ? lastRenderedPhotos : allPhotos);
+    currentDetailPhotos = source.filter(Boolean);
+    currentDetailIndex = currentDetailPhotos.findIndex(p => String(p.id) === String(photoId));
+    if (currentDetailIndex < 0) currentDetailIndex = 0;
+    renderPhotoDetail();
+};
+
+function renderPhotoDetail() {
+    const photo = currentDetailPhotos[currentDetailIndex];
+    if (!photo) return;
+
+    document.getElementById('detailImage').src = photo.image;
+    document.getElementById('detailYear').textContent = `${photo.year} год`;
+    document.getElementById('detailDesc').textContent = photo.description || 'Описание не добавлено';
+    document.getElementById('detailLocation').innerHTML = `<i class="fas fa-map-marker-alt"></i> ${photo.location_name || '—'}`;
+    document.getElementById('detailAzimuth').innerHTML = `<i class="fas fa-compass"></i> ${photo.azimuth == null ? 'Азимут не указан' : `Азимут: ${photo.azimuth}°`}`;
+    document.getElementById('detailAuthor').innerHTML = `<i class="fas fa-user"></i> ${photo.owner_username || 'Аноним'}`;
+    document.getElementById('detailStatus').innerHTML = `<i class="fas fa-tag"></i> ${photo.status_name || 'Статус не указан'}`;
+    document.getElementById('detailCreated').innerHTML = `<i class="far fa-clock"></i> ${photo.created_at ? new Date(photo.created_at).toLocaleDateString('ru-RU') : 'Дата загрузки не указана'}`;
+    document.getElementById('detailPrevBtn').style.display = currentDetailPhotos.length > 1 ? 'flex' : 'none';
+    document.getElementById('detailNextBtn').style.display = currentDetailPhotos.length > 1 ? 'flex' : 'none';
+    document.getElementById('detailDownload').onclick = () => downloadPhotoFile(photo);
+    document.getElementById('detailGoToMap').onclick = () => {
+        closePhotoDetail();
+        const marker = markersMap.get(String(photo.location));
+        if (marker) {
+            markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+        } else {
+            alert('Локация не найдена на карте');
+        }
+    };
+    photoDetailModal.style.display = 'flex';
+}
+
+function showAdjacentPhoto(direction) {
+    if (!currentDetailPhotos.length) return;
+    currentDetailIndex = (currentDetailIndex + direction + currentDetailPhotos.length) % currentDetailPhotos.length;
+    renderPhotoDetail();
+}
 
 
     checkAuth();

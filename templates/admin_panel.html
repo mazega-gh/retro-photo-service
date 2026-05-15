@@ -7,6 +7,8 @@
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     
     <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -168,6 +170,19 @@
             color: var(--text-primary); font-size: 14px; outline: none; transition: border-color 0.2s;
         }
         .form-control:focus { border-color: var(--accent-primary); }
+        .filters-row {
+            display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+            align-items: center;
+        }
+        .filters-row .form-control { max-width: 260px; background: var(--bg-primary); }
+        .filters-row .search-control { flex: 1; min-width: 260px; max-width: none; }
+        .map-hint {
+            font-size: 13px; color: var(--text-muted); margin: -10px 0 16px;
+        }
+        .row-selected td {
+            background: var(--accent-bg) !important;
+            color: var(--text-primary);
+        }
         
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -291,6 +306,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
     // ========== THEME & UI HELPERS ==========
     const themeToggle = document.getElementById('themeToggle');
@@ -330,7 +346,21 @@
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
-        return data.results || data;
+        if (options.method && options.method !== 'GET') return data;
+        if (!data || !Array.isArray(data.results)) return data;
+
+        let results = [...data.results];
+        let nextUrl = data.next;
+        while (nextUrl) {
+            const nextResp = await fetch(nextUrl, {
+                headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+            });
+            const nextData = await nextResp.json();
+            if (!nextResp.ok) throw new Error(nextData.detail || JSON.stringify(nextData));
+            results = results.concat(nextData.results || []);
+            nextUrl = nextData.next;
+        }
+        return results;
     }
 
     // ========== SECTIONS LOGIC ==========
@@ -488,6 +518,7 @@
     let miniMapInstance = null;
     function initMiniMap(items) {
         if(miniMapInstance) miniMapInstance.remove();
+        adminLocationMapLayer = null;
         miniMapInstance = L.map('miniMap').setView([57.6299, 39.8737], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(miniMapInstance);
         items.forEach(item => {
@@ -718,6 +749,294 @@
             await fetch(`${API_BASE}photos/${id}/`, { method:'DELETE', headers:{'X-CSRFToken':CSRF_TOKEN} });
             loadPhotos(); showMessage('Удалено', false);
         } catch(e) { showMessage('Ошибка', true); }
+    }
+
+    let adminPhotosCache = [];
+    let adminLocationsCache = [];
+    let adminPhotoMap = null;
+    let adminPhotoLayer = null;
+    let adminLocationMetaCache = {};
+
+    loadPhotos = async function() {
+        document.getElementById('pageTitle').textContent = 'Архивные фотографии';
+        adminPhotosCache = await fetchJSON(`${API_BASE}photos/`);
+        adminLocationsCache = await fetchJSON(`${API_BASE}locations/`);
+
+        document.getElementById('section-content').innerHTML = `
+            <div style="margin-bottom:20px;"><button class="btn btn-success" id="addPhotoBtn"><i class="fas fa-plus"></i> Добавить фото</button></div>
+            <div id="adminPhotoMap" class="mini-map-container"></div>
+            <div class="map-hint">Клик по маркеру на карте подсвечивает фотографию в таблице.</div>
+            <div class="filters-row">
+                <input class="form-control search-control" id="photoSearch" placeholder="Поиск по описанию, локации, автору...">
+                <select class="form-control" id="photoLocationFilter">
+                    <option value="">Все локации</option>
+                    ${adminLocationsCache.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+                </select>
+                <input class="form-control" id="photoYearFrom" type="number" placeholder="Год от">
+                <input class="form-control" id="photoYearTo" type="number" placeholder="Год до">
+            </div>
+            <div class="card">
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>ID</th><th>Фото</th><th>Год</th><th>Локация</th><th>Описание</th><th style="width:100px">Действия</th></tr></thead>
+                        <tbody id="adminPhotosTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('addPhotoBtn').onclick = () => showPhotoForm();
+        ['photoSearch', 'photoLocationFilter', 'photoYearFrom', 'photoYearTo'].forEach(id => {
+            document.getElementById(id).addEventListener('input', renderAdminPhotos);
+            document.getElementById(id).addEventListener('change', renderAdminPhotos);
+        });
+        initAdminPhotoMap();
+        renderAdminPhotos();
+    };
+
+    function filteredAdminPhotos() {
+        const search = document.getElementById('photoSearch')?.value.toLowerCase().trim() || '';
+        const location = document.getElementById('photoLocationFilter')?.value || '';
+        const yearFrom = parseInt(document.getElementById('photoYearFrom')?.value || '', 10);
+        const yearTo = parseInt(document.getElementById('photoYearTo')?.value || '', 10);
+
+        return adminPhotosCache.filter(p => {
+            const text = `${p.description || ''} ${p.location_name || ''} ${p.owner_username || ''} ${p.year || ''}`.toLowerCase();
+            if (search && !text.includes(search)) return false;
+            if (location && String(p.location) !== location) return false;
+            if (!Number.isNaN(yearFrom) && Number(p.year) < yearFrom) return false;
+            if (!Number.isNaN(yearTo) && Number(p.year) > yearTo) return false;
+            return true;
+        });
+    }
+
+    function renderAdminPhotos() {
+        const photos = filteredAdminPhotos().sort((a, b) => Number(a.year || 0) - Number(b.year || 0));
+        const tbody = document.getElementById('adminPhotosTableBody');
+        if (!tbody) return;
+
+        if (!photos.length) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:28px;">Ничего не найдено</td></tr>`;
+        } else {
+            tbody.innerHTML = photos.map(p => `
+                <tr id="admin-photo-row-${p.id}">
+                    <td>${p.id}</td>
+                    <td><img src="${p.image}" style="width:50px;height:35px;object-fit:cover;border-radius:4px;"></td>
+                    <td>${p.year}</td>
+                    <td>${p.location_name || '—'}</td>
+                    <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.description || ''}">${p.description || ''}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" onclick="showPhotoForm(${p.id})"><i class="fas fa-pen"></i></button>
+                        <button class="btn btn-danger btn-sm" onclick="deletePhoto(${p.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        updateAdminPhotoMap(photos);
+    }
+
+    function initAdminPhotoMap() {
+        if (adminPhotoMap) adminPhotoMap.remove();
+        adminPhotoMap = L.map('adminPhotoMap').setView([57.6299, 39.8737], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(adminPhotoMap);
+        adminPhotoLayer = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
+            disableClusteringAtZoom: 18,
+        }).addTo(adminPhotoMap);
+    }
+
+    function updateAdminPhotoMap(photos) {
+        if (!adminPhotoLayer) return;
+        adminPhotoLayer.clearLayers();
+        const bounds = [];
+        photos.forEach(photo => {
+            const loc = adminLocationsCache.find(l => String(l.id) === String(photo.location));
+            if (!loc?.coordinates?.coordinates) return;
+            const [lon, lat] = loc.coordinates.coordinates;
+            bounds.push([lat, lon]);
+            const marker = L.marker([lat, lon]);
+            marker.bindPopup(`
+                <div style="min-width:170px;text-align:center;">
+                    <img src="${photo.image}" style="width:100%;max-height:110px;object-fit:cover;border-radius:6px;margin-bottom:6px;">
+                    <b>${photo.year}</b><br>
+                    <small>${photo.location_name || loc.name}</small>
+                </div>
+            `);
+            marker.on('click', () => focusAdminPhoto(photo.id));
+            adminPhotoLayer.addLayer(marker);
+        });
+        if (bounds.length) adminPhotoMap.fitBounds(bounds, { padding: [35, 35], maxZoom: 15 });
+    }
+
+    function focusAdminPhoto(photoId) {
+        document.querySelectorAll('#adminPhotosTableBody tr').forEach(row => row.classList.remove('row-selected'));
+        const row = document.getElementById(`admin-photo-row-${photoId}`);
+        if (row) {
+            row.classList.add('row-selected');
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    let adminAllLocations = [];
+    let adminLocationTypes = [];
+    let adminLocationMapLayer = null;
+
+    loadLocations = async function() {
+        document.getElementById('pageTitle').textContent = 'Локации';
+        adminAllLocations = await fetchJSON(`${API_BASE}locations/`);
+        adminLocationTypes = await fetchJSON(`${API_BASE}location-types/`);
+        await enrichAdminLocationFilters(adminAllLocations);
+
+        document.getElementById('section-content').innerHTML = `
+            <div style="margin-bottom:20px;"><button class="btn btn-success" onclick="showLocationForm()"><i class="fas fa-plus"></i> Добавить локацию</button></div>
+            <div id="miniMap" class="mini-map-container"></div>
+            <div class="filters-row">
+                <input class="form-control search-control" id="adminLocationSearch" placeholder="Поиск по названию, стране, городу...">
+                <select class="form-control" id="adminLocationCountry"><option value="">Все страны</option></select>
+                <select class="form-control" id="adminLocationCity"><option value="">Все города</option></select>
+                <select class="form-control" id="adminLocationType">
+                    <option value="">Все типы</option>
+                    ${adminLocationTypes.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                </select>
+                <select class="form-control" id="adminLocationStatus">
+                    <option value="">Все статусы</option>
+                    <option value="approved">Одобренные</option>
+                    <option value="pending">На проверке</option>
+                </select>
+            </div>
+            <div class="card">
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>ID</th><th>Название</th><th>Страна</th><th>Город</th><th>Тип</th><th>Статус</th><th>Координаты</th><th style="width:120px">Действия</th></tr></thead>
+                        <tbody id="adminLocationsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        populateAdminLocationCountryCityFilters();
+        ['adminLocationSearch', 'adminLocationCountry', 'adminLocationCity', 'adminLocationType', 'adminLocationStatus'].forEach(id => {
+            document.getElementById(id).addEventListener('input', renderAdminLocations);
+            document.getElementById(id).addEventListener('change', () => {
+                if (id === 'adminLocationCountry') populateAdminLocationCityFilter();
+                renderAdminLocations();
+            });
+        });
+        initMiniMap([]);
+        renderAdminLocations();
+    };
+
+    async function enrichAdminLocationFilters(locations) {
+        for (const loc of locations) {
+            if (adminLocationMetaCache[loc.id]) continue;
+            const coords = loc.coordinates?.coordinates;
+            if (!coords) {
+                adminLocationMetaCache[loc.id] = { country: '', city: '' };
+                continue;
+            }
+            try {
+                const [lon, lat] = coords;
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`);
+                const data = await response.json();
+                adminLocationMetaCache[loc.id] = {
+                    country: data.address?.country || '',
+                    city: data.address?.city || data.address?.town || data.address?.village || data.address?.county || '',
+                };
+            } catch (error) {
+                adminLocationMetaCache[loc.id] = { country: '', city: '' };
+            }
+        }
+    }
+
+    function populateAdminLocationCountryCityFilters() {
+        const countrySelect = document.getElementById('adminLocationCountry');
+        const countries = [...new Set(Object.values(adminLocationMetaCache).map(m => m.country).filter(Boolean))].sort();
+        countrySelect.innerHTML = '<option value="">Все страны</option>' + countries.map(c => `<option value="${c}">${c}</option>`).join('');
+        populateAdminLocationCityFilter();
+    }
+
+    function populateAdminLocationCityFilter() {
+        const citySelect = document.getElementById('adminLocationCity');
+        const country = document.getElementById('adminLocationCountry')?.value || '';
+        const cities = [...new Set(Object.values(adminLocationMetaCache)
+            .filter(m => !country || m.country === country)
+            .map(m => m.city)
+            .filter(Boolean))].sort();
+        citySelect.innerHTML = '<option value="">Все города</option>' + cities.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    function filteredAdminLocations() {
+        const search = document.getElementById('adminLocationSearch')?.value.toLowerCase().trim() || '';
+        const country = document.getElementById('adminLocationCountry')?.value || '';
+        const city = document.getElementById('adminLocationCity')?.value || '';
+        const type = document.getElementById('adminLocationType')?.value || '';
+        const status = document.getElementById('adminLocationStatus')?.value || '';
+
+        return adminAllLocations.filter(loc => {
+            const meta = adminLocationMetaCache[loc.id] || {};
+            const text = `${loc.name || ''} ${meta.country || ''} ${meta.city || ''} ${loc.location_type_name || ''}`.toLowerCase();
+            if (search && !text.includes(search)) return false;
+            if (country && meta.country !== country) return false;
+            if (city && meta.city !== city) return false;
+            if (type && String(loc.location_type || '') !== type) return false;
+            if (status === 'approved' && !loc.is_approved) return false;
+            if (status === 'pending' && loc.is_approved) return false;
+            return true;
+        });
+    }
+
+    function renderAdminLocations() {
+        const items = filteredAdminLocations();
+        const tbody = document.getElementById('adminLocationsTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = items.length ? items.map(item => {
+            const meta = adminLocationMetaCache[item.id] || {};
+            let coords = '—';
+            if (item.coordinates?.coordinates) {
+                const [lon, lat] = item.coordinates.coordinates;
+                coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            }
+            return `
+                <tr id="loc-row-${item.id}">
+                    <td>${item.id}</td>
+                    <td style="font-weight:500;color:var(--text-primary)">${item.name}</td>
+                    <td>${meta.country || '—'}</td>
+                    <td>${meta.city || '—'}</td>
+                    <td>${item.location_type_name || '—'}</td>
+                    <td>${item.is_approved ? 'Одобрена' : 'На проверке'}</td>
+                    <td style="font-family:monospace;font-size:12px;">${coords}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" onclick="showLocationForm(${item.id})"><i class="fas fa-pen"></i></button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteItem('locations', ${item.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('') : `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:28px;">Ничего не найдено</td></tr>`;
+        updateAdminLocationMap(items);
+    }
+
+    function updateAdminLocationMap(items) {
+        if (!miniMapInstance) return;
+        if (!adminLocationMapLayer) adminLocationMapLayer = L.markerClusterGroup({ showCoverageOnHover: false }).addTo(miniMapInstance);
+        adminLocationMapLayer.clearLayers();
+        const bounds = [];
+        items.forEach(item => {
+            if (!item.coordinates?.coordinates) return;
+            const [lon, lat] = item.coordinates.coordinates;
+            bounds.push([lat, lon]);
+            const marker = L.marker([lat, lon]).bindPopup(`<b>${item.name}</b><br><small>${item.is_approved ? 'Одобрена' : 'На проверке'}</small>`);
+            marker.on('click', () => {
+                document.querySelectorAll('#adminLocationsTableBody tr').forEach(row => row.classList.remove('row-selected'));
+                const row = document.getElementById(`loc-row-${item.id}`);
+                if (row) {
+                    row.classList.add('row-selected');
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+            adminLocationMapLayer.addLayer(marker);
+        });
+        if (bounds.length) miniMapInstance.fitBounds(bounds, { padding: [35, 35], maxZoom: 15 });
     }
 
     // --- NAVIGATION ---

@@ -578,6 +578,40 @@
 
             <!-- SECTION: LOCATIONS -->
             <section id="locations" class="section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon pending"><i class="fas fa-clock"></i></div>
+                        <div class="stat-info">
+                            <h4>Ожидают</h4>
+                            <div class="stat-value" id="countLocationsPending">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon approved"><i class="fas fa-check"></i></div>
+                        <div class="stat-info">
+                            <h4>Одобрено</h4>
+                            <div class="stat-value" id="countLocationsApproved">0</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon rejected"><i class="fas fa-map-marker-alt"></i></div>
+                        <div class="stat-info">
+                            <h4>Всего</h4>
+                            <div class="stat-value" id="countLocationsTotal">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="filters-row">
+                    <div class="input-group">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="form-input" id="locationSearchInput" placeholder="Поиск по названию, типу, координатам...">
+                    </div>
+                    <select class="form-select" id="locationSortFilter">
+                        <option value="newest">Сначала новые</option>
+                        <option value="oldest">Сначала старые</option>
+                        <option value="name">По названию</option>
+                    </select>
+                </div>
                 <div id="moderationMiniMap" style="width:100%; height:350px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border-color);"></div>
                 <div class="grid" id="locationsContainer">
                     <div class="card"><div class="skeleton" style="height:120px;"></div></div>
@@ -658,6 +692,7 @@
 
      let moderationMap = null;
     let moderationMarkers = [];
+    let allPendingLocations = [];
 
     function switchTab(tabId) {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -802,6 +837,131 @@
         } catch(e) {
             document.getElementById('locationsContainer').innerHTML = `<div class="empty-state">Ошибка: ${e.message}</div>`;
         }
+    }
+
+    loadPendingLocations = async function() {
+        try {
+            const data = await fetchJSON('/api/moderation/locations/');
+            allPendingLocations = Array.isArray(data) ? data : (data.results || []);
+            const stats = data.stats || {
+                pending: allPendingLocations.length,
+                approved: 0,
+                total: allPendingLocations.length,
+            };
+            document.getElementById('countLocationsPending').textContent = stats.pending ?? 0;
+            document.getElementById('countLocationsApproved').textContent = stats.approved ?? 0;
+            document.getElementById('countLocationsTotal').textContent = stats.total ?? 0;
+            renderPendingLocations();
+        } catch(e) {
+            document.getElementById('locationsContainer').innerHTML = `<div class="empty-state">Ошибка: ${e.message}</div>`;
+        }
+    };
+
+    function filteredPendingLocations() {
+        const search = document.getElementById('locationSearchInput')?.value.toLowerCase().trim() || '';
+        const sort = document.getElementById('locationSortFilter')?.value || 'newest';
+        const result = allPendingLocations.filter(loc => {
+            const coords = loc.coordinates?.coordinates ? `${loc.coordinates.coordinates[1]} ${loc.coordinates.coordinates[0]}` : '';
+            const text = `${loc.name || ''} ${loc.location_type_name || ''} ${loc.location_type || ''} ${coords}`.toLowerCase();
+            return !search || text.includes(search);
+        });
+
+        result.sort((a, b) => {
+            if (sort === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+            if (sort === 'name') return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+        return result;
+    }
+
+    function renderPendingLocations() {
+        const locs = filteredPendingLocations();
+        const container = document.getElementById('locationsContainer');
+        const empty = document.getElementById('emptyLocations');
+
+        if (moderationMap && moderationMarkers.length) {
+            moderationMarkers.forEach(m => moderationMap.removeLayer(m));
+            moderationMarkers = [];
+        }
+
+        if (locs.length === 0) {
+            container.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+
+        container.innerHTML = locs.map(loc => {
+            const coords = loc.coordinates?.coordinates
+                ? `${loc.coordinates.coordinates[1].toFixed(5)}, ${loc.coordinates.coordinates[0].toFixed(5)}`
+                : '—';
+            const created = formatDate(loc.created_at);
+            const locType = loc.location_type_name || (loc.location_type ? `ID: ${loc.location_type}` : 'не указан');
+
+            return `
+                <article class="card" id="loc-card-${loc.id}" data-loc-id="${loc.id}">
+                    <div class="card-body">
+                        <div class="card-header">
+                            <span class="year-badge">${loc.name}</span>
+                            <span class="loc-name">На проверке</span>
+                        </div>
+                        <p class="desc" style="font-size:13px;margin:8px 0;">
+                            <i class="fas fa-tag"></i> Тип: ${locType}
+                        </p>
+                        <div class="loc-meta">
+                            <span><i class="fas fa-clock"></i> Создана: ${created}</span>
+                            <span class="loc-coords"><i class="fas fa-map-pin"></i> ${coords}</span>
+                        </div>
+                        <div class="actions" style="margin-top:12px;">
+                            <button class="btn btn-approve" onclick="approveLocation(${loc.id})">
+                                <i class="fas fa-check"></i> Одобрить
+                            </button>
+                            <button class="btn btn-reject" onclick="rejectLocation(${loc.id})">
+                                <i class="fas fa-times"></i> Отклонить
+                            </button>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }).join('');
+
+        const bounds = [];
+        locs.forEach(loc => {
+            if (!moderationMap || !loc.coordinates?.coordinates) return;
+            const [lon, lat] = loc.coordinates.coordinates;
+            bounds.push([lat, lon]);
+            const marker = L.marker([lat, lon], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background:var(--warning);color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);">${loc.id}</div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(moderationMap);
+
+            marker.bindPopup(`<b>${loc.name}</b><br><small>${loc.location_type_name || 'Без типа'}</small>`);
+            marker.on('click', () => {
+                highlightLocation(loc.id);
+                const card = document.getElementById(`loc-card-${loc.id}`);
+                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            marker.locId = loc.id;
+            moderationMarkers.push(marker);
+        });
+        if (bounds.length) moderationMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+
+        document.querySelectorAll('.card[data-loc-id]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                const locId = parseInt(card.dataset.locId);
+                highlightLocation(locId);
+                const marker = moderationMarkers.find(m => m.locId === locId);
+                if (marker) {
+                    moderationMap.flyTo(marker.getLatLng(), 16, { duration: 1 });
+                    setTimeout(() => marker.openPopup(), 1000);
+                }
+            });
+        });
     }
 
     async function approveLocation(id) {
@@ -1164,6 +1324,8 @@
     // Listeners
     document.getElementById('searchInput').addEventListener('input', renderPending);
     document.getElementById('sortFilter').addEventListener('change', renderPending);
+    document.getElementById('locationSearchInput').addEventListener('input', renderPendingLocations);
+    document.getElementById('locationSortFilter').addEventListener('change', renderPendingLocations);
     document.getElementById('logSearch').addEventListener('input', () => loadLog());
     document.getElementById('logStatusFilter').addEventListener('change', () => loadLog());
 

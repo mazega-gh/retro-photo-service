@@ -37,8 +37,9 @@ class LocationSerializer(GeoFeatureModelSerializer):
 
 class AdminLocationSerializer(serializers.ModelSerializer):
     coordinates = GeometryField()
+    location_type_name = serializers.ReadOnlyField(source='location_type.name', allow_null=True)
 
     class Meta:
         model = Location
-        fields = ['id', 'name', 'coordinates', 'location_type', 'created_at']
+        fields = ['id', 'name', 'coordinates', 'location_type', 'location_type_name', 'is_approved', 'created_at']
         read_only_fields = ['created_at']
