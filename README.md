@@ -1,34 +1,34 @@
 # RetroPhoto Service
 
-Web service for georeferenced archive photos with an interactive Leaflet map,
-moderation workflow, role-based access, and a "then and now" comparison view.
+Веб-сервис для архивных фотографий с геопривязкой, интерактивной картой Leaflet,
+процессом модерации, доступом на основе ролей и сравнением «тогда и сейчас».
 
-## Main Features
+## Основные функции
 
-- Interactive map centered on Yaroslavl.
-- Location storage with PostGIS `PointField` coordinates.
-- Archive photo upload with year, description, location, and optional azimuth.
-- Public API exposes only published photos.
-- Intelligent "then and now" pair selection for the comparison slider.
-- Moderation queue for approving and rejecting user uploads.
-- Admin panel for users, roles, locations, photos, statuses, and logs.
-- Leaflet marker clustering for dense location areas.
-- OpenAPI schema and Swagger/Redoc documentation.
+- Интерактивная карта с центром в Ярославле.
+- Хранение местоположения с координатами PostGIS `PointField`.
+- Загрузка архивных фотографий с указанием года, описания, местоположения и, при необходимости, азимута.
+- Публичный API предоставляет доступ только к опубликованным фотографиям.
+- Интеллектуальный выбор пары «тогда и сейчас» для ползунка сравнения.
+- Очередь модерации для утверждения и отклонения загрузок пользователей.
+- Панель администратора для пользователей, ролей, местоположений, фотографий, статусов и журналов.
+- Кластеризация маркеров Leaflet для зон с высокой плотностью местоположений.
+- Схема OpenAPI и документация Swagger/Redoc.
 
-## Tech Stack
+## Технологический стек
 
 - Python, Django, Django REST Framework
-- PostgreSQL with PostGIS
-- GeoDjango and `djangorestframework-gis`
-- Leaflet and Leaflet.markercluster
-- Pillow for image handling
-- drf-spectacular for API documentation
+- PostgreSQL с PostGIS
+- GeoDjango и `djangorestframework-gis`
+- Leaflet и Leaflet.markercluster
+- Pillow для обработки изображений
+- drf-spectacular для документации API
 
-## Intelligent Photo Matching
+## Интеллектуальное сопоставление фотографий
 
-The comparison slider does not simply take the oldest and newest photos anymore.
-For a selected location the backend analyzes every published photo pair and
-selects the strongest old/new match.
+Ползунок сравнения больше не просто выбирает самые старые и самые новые фотографии.
+Для выбранного местоположения бэкэнд анализирует каждую опубликованную пару фотографий и
+выбирает наиболее точное совпадение «старое/новое».
 
 Endpoint:
 
@@ -36,30 +36,30 @@ Endpoint:
 GET /api/photos/smart-compare/?location=<location_id>
 ```
 
-The algorithm extracts compact visual descriptors with Pillow:
+Алгоритм извлекает компактные визуальные дескрипторы с помощью Pillow:
 
-- perceptual average hash and difference hash;
-- luminance grid for composition similarity;
-- edge grid for perspective and object contours;
-- RGB color histogram;
-- aspect ratio, brightness, and contrast;
-- metadata signals: year distance and shooting azimuth.
+- хеш среднего значения восприятия и хеш разницы;
+- сетка яркости для сходства композиции;
+- сетка краев для перспективы и контуров объектов;
+- цветовая гистограмма RGB;
+- Соотношение сторон, яркость и контрастность;
+- Метаданные: расстояние в годах и азимут съемки.
 
-Each candidate pair receives a weighted score. The frontend shows the selected
-pair in the existing slider and displays the AI score, number of analyzed pairs,
-visual similarity, and azimuth score. If analysis is unavailable, the interface
-falls back to a chronological pair so the user always gets a comparison.
+Каждая пара кандидатов получает взвешенную оценку. Фронтенд отображает выбранную
+пару в существующем ползунке и показывает оценку ИИ, количество проанализированных пар,
+визуальное сходство и оценку азимута. Если анализ недоступен, интерфейс
+переключается на хронологическую пару, чтобы пользователь всегда мог сравнить пары.
 
-## Local Setup
+## Локальная настройка
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+1. Создайте и активируйте виртуальную среду.
+2. Установите зависимости:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-3. Configure environment variables or `.env`:
+3. Настройте переменные среды или `.env`:
 
 ```env
 DJANGO_SECRET_KEY=change-me
@@ -67,70 +67,63 @@ DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
 ```
 
-4. Make sure PostgreSQL/PostGIS and GDAL paths in `config/settings.py` match your machine.
-5. Apply migrations:
+4. Убедитесь, что пути PostgreSQL/PostGIS и GDAL в `config/settings.py` соответствуют вашей машине.
+
+5. Примените миграции:
 
 ```powershell
 python manage.py migrate
 ```
 
-6. Create a superuser:
+6. Создайте суперпользователя:
 
 ```powershell
 python manage.py createsuperuser
 ```
 
-7. Run the development server:
+7. Запустите сервер разработки:
 
 ```powershell
 python manage.py runserver
 ```
 
-## Important URLs
+## Важные URL-адреса
 
-- Main map: `http://127.0.0.1:8000/`
-- Django admin: `http://127.0.0.1:8000/admin/`
-- Custom admin panel: `http://127.0.0.1:8000/admin-panel/`
-- Moderation panel: `http://127.0.0.1:8000/moderation/`
-- API docs: `http://127.0.0.1:8000/api/docs/`
-- API schema: `http://127.0.0.1:8000/api/schema/`
+- Основная карта: `http://127.0.0.1:8000/`
+- Административная панель Django: `http://127.0.0.1:8000/admin/`
+- Пользовательская панель администратора: `http://127.0.0.1:8000/admin-panel/`
+- Панель модерации: `http://127.0.0.1:8000/moderation/`
+- Документация API: `http://127.0.0.1:8000/api/docs/`
+- API Схема: `http://127.0.0.1:8000/api/schema/`
 - Redoc: `http://127.0.0.1:8000/api/redoc/`
 
-## Seeded Reference Data
+## Справочные данные
 
-Migrations create the base roles and moderation statuses:
+Миграции создают базовые роли и статусы модерации:
 
-- Roles: `user`, `moderator`, `admin`
-- Statuses: `На проверке`, `Опубликовано`, `Отклонено`
+- Роли: `user`, `moderator`, `admin`
+- Статусы: `На секретной`, `Опубликовано`, `Отклонено`
 
-## Tests
+## Тесты
 
-Run:
+Запуск:
 
 ```powershell
 python manage.py test
 ```
 
-The test suite covers registration, photo upload validation, public visibility,
-and moderation permissions.
+Набор тестов охватывает регистрацию, проверку загрузки фотографий, публичную видимость,
+и разрешения модерации.
 
-## Production Notes
+## Примечания для среды
 
-Before deployment:
+Перед развертыванием:
 
-- Set `DJANGO_DEBUG=False`.
-- Set a real `DJANGO_SECRET_KEY`.
-- Configure `DJANGO_ALLOWED_HOSTS`.
-- Enable HTTPS and secure cookie flags:
-  - `DJANGO_SECURE_SSL_REDIRECT=True`
-  - `DJANGO_SESSION_COOKIE_SECURE=True`
-  - `DJANGO_CSRF_COOKIE_SECURE=True`
-- Serve static and media files through Nginx or another web server.
-
-## Recommended Next Improvements
-
-- Generate WebP thumbnails during upload.
-- Add map bounding-box filtering for large datasets.
-- Add request throttling for authentication and uploads.
-- Add service worker caching if offline mode remains in the diploma text.
-- Normalize all Russian UI strings to UTF-8 where mojibake is still visible.
+- Установите `DJANGO_DEBUG=False`.
+- Установите реальный `DJANGO_SECRET_KEY`.
+- Настройте `DJANGO_ALLOWED_HOSTS`.
+- Включите флаги HTTPS и безопасного использования cookie:
+- `DJANGO_SECURE_SSL_REDIRECT=True`
+- `DJANGO_SESSION_COOKIE_SECURE=True`
+- `DJANGO_CSRF_COOKIE_SECURE=True`
+- Предоставляйте доступ к статическим и медиафайлам через Nginx или другой веб-сервер.
