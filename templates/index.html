@@ -979,6 +979,10 @@
 <script>
     console.log("🚀 Скрипт загружен");
 
+    // ===== ГЛОБАЛЬНЫЕ ДАННЫЕ ДЛЯ ФИЛЬТРАЦИИ КАРТЫ =====
+    let allLocationsData = []; // Кэш всех локаций для фильтрации
+    let yearFilterActive = false; // Флаг: активен ли фильтр по годам
+
     const photosCache = {};
     const photosDataCache = {};
     let currentUser = null;  // будет объект или null
@@ -1133,6 +1137,13 @@
             if (!photos) {
                 photos = await fetchAllResults(`/api/photos/?location=${locId}`);
                 photosDataCache[locId] = photos;
+                if (yearFilterActive) {
+                const { selectedMin, selectedMax } = timelineConfig;
+                photos = photos.filter(p => {
+                    const year = parseInt(p.year);
+                    return !isNaN(year) && year >= selectedMin && year <= selectedMax;
+                });
+            }
             }
 
             const sorted = [...photos].sort((a, b) => Number(a.year || 0) - Number(b.year || 0));
@@ -2065,6 +2076,7 @@
             else if (Array.isArray(rawData)) locations = rawData;
 
             console.log(`📍 Локаций найдено: ${locations.length}`);
+            allLocationsData = locations;
             markerCluster.clearLayers();
             markersMap.clear();
 
@@ -2121,44 +2133,9 @@
                     openLocationPhotosModal(locId, locName);
                 });
 
-                marker.on('popupopen', async () => {
-                    const container = document.getElementById(`popup-${locId}`);
-                    if (!container) return;
-                    const galleryDiv = container.querySelector('.popup-photos');
-                    const compareBtn = container.querySelector(`#compareBtn-${locId}`);
-                    if (photosCache[locId]) {
-                        galleryDiv.innerHTML = photosCache[locId];
-                        compareBtn.style.display = (photosDataCache[locId]?.length >= 2) ? 'inline-block' : 'none';
-                        return;
-                    }
-                    try {
-                        const photosResp = await fetch(`/api/photos/?location=${locId}`);
-                        if (!photosResp.ok) throw new Error('Ошибка загрузки');
-                        const photosData = await photosResp.json();
-                        const photos = Array.isArray(photosData) ? photosData : (photosData.results || []);
-                        photosDataCache[locId] = photos;
-                        let html = '';
-                        if (photos.length === 0) {
-                            html = '<em>Нет опубликованных фото</em>';
-                            compareBtn.style.display = 'none';
-                        } else {
-                            html = '<div class="popup-gallery">';
-                            photos.forEach(photo => {
-                                html += `<div class="popup-gallery-item">
-                                    <img src="${photo.image}" class="popup-img" loading="lazy">
-                                    <div class="popup-year">${photo.year}</div>
-                                    ${photo.description ? `<div class="popup-desc">${photo.description}</div>` : ''}
-                                </div>`;
-                            });
-                            html += '</div>';
-                            compareBtn.style.display = photos.length >= 2 ? 'inline-block' : 'none';
-                        }
-                        photosCache[locId] = html;
-                        galleryDiv.innerHTML = html;
-                    } catch (err) {
-                        galleryDiv.innerHTML = '<em>Ошибка загрузки фото</em>';
-                        compareBtn.style.display = 'none';
-                    }
+                                marker.on('popupopen', async () => {
+                    // Используем нашу новую функцию для учёта фильтра
+                    await updatePopupContent(locId, locName);
                 });
             });
             markerCluster.refreshClusters();
@@ -2169,7 +2146,185 @@
         // Загружаем все фото для панели
         await loadAllPhotos();
         renderPhotos();
+         if (typeof initYearTimeline === 'function') {
+            initYearTimeline();
+        }
     }
+
+    // ===== НОВЫЕ ФУНКЦИИ ДЛЯ ФИЛЬТРАЦИИ КАРТЫ ПО ГОДАМ =====
+
+// Получить фото локации, отфильтрованные по году
+function getPhotosByLocationAndYear(locId, minYear, maxYear) {
+    const photos = photosDataCache[locId] || [];
+    return photos.filter(p => {
+        const year = parseInt(p.year);
+        return !isNaN(year) && year >= minYear && year <= maxYear;
+    });
+}
+
+// Получить самую старую фотографию из отфильтрованного списка
+function getOldestPhotoInRange(photos) {
+    if (!photos || photos.length === 0) return null;
+    return [...photos].sort((a, b) => parseInt(a.year) - parseInt(b.year))[0];
+}
+
+// Обновить иконку маркера
+function updateMarkerIcon(marker, photoUrl) {
+    if (photoUrl) {
+        const newIcon = L.icon({
+            iconUrl: photoUrl,
+            iconSize: [48, 48],
+            iconAnchor: [24, 48],
+            popupAnchor: [0, -48],
+            className: 'photo-marker'
+        });
+        marker.setIcon(newIcon);
+    } else {
+        marker.setIcon(new L.Icon.Default());
+    }
+}
+
+// Применить фильтр по годам к карте
+function applyMapYearFilter() {
+    const { selectedMin, selectedMax, minYear, maxYear } = timelineConfig;
+    
+    // Если фильтр охватывает весь диапазон — показываем всё
+    if (selectedMin <= minYear && selectedMax >= maxYear) {
+        yearFilterActive = false;
+        // Восстанавливаем все маркеры с оригинальными иконками
+        markersMap.forEach(marker => {
+            if (!markerCluster.hasLayer(marker)) {
+                markerCluster.addLayer(marker);
+            }
+            // Восстанавливаем оригинальную иконку
+            if (marker._locData?.oldestPhotoUrl) {
+                updateMarkerIcon(marker, marker._locData.oldestPhotoUrl);
+            }
+        });
+        return;
+    }
+    
+    yearFilterActive = true;
+    
+    // Очищаем кластер для перерисовки
+    markerCluster.clearLayers();
+    
+    // Проходим по всем локациям
+    allLocationsData.forEach(feature => {
+        const props = feature.properties || {};
+        const locId = props.id || feature.id;
+        if (!locId) return;
+        
+        const marker = markersMap.get(String(locId));
+        if (!marker) return;
+        
+        // Получаем фото (из кэша или пустой массив)
+        const photos = photosDataCache[locId] || [];
+        
+        // Фильтруем по году
+        const filteredPhotos = getPhotosByLocationAndYear(locId, selectedMin, selectedMax);
+        
+        if (filteredPhotos.length === 0) {
+            // Нет фото в диапазоне — не добавляем маркер в кластер
+            return;
+        }
+        
+        // Есть фото — обновляем иконку и добавляем в кластер
+        const oldestInFilter = getOldestPhotoInRange(filteredPhotos);
+        updateMarkerIcon(marker, oldestInFilter?.image);
+        
+        // Сохраняем данные для попапа
+        marker._filteredPhotos = filteredPhotos;
+        
+        markerCluster.addLayer(marker);
+    });
+    
+    markerCluster.refreshClusters();
+}
+
+// Обновить контент попапа с учётом фильтра
+async function updatePopupContent(locId, locName) {
+    const container = document.getElementById(`popup-${locId}`);
+    if (!container) return;
+    
+    const { selectedMin, selectedMax } = timelineConfig;
+    
+    // Получаем фото
+    let photos = photosDataCache[locId];
+    if (!photos) {
+        try {
+            const resp = await fetch(`/api/photos/?location=${locId}`);
+            if (!resp.ok) throw new Error('Ошибка');
+            const data = await resp.json();
+            photos = Array.isArray(data) ? data : (data.results || []);
+            photosDataCache[locId] = photos;
+        } catch (err) {
+            container.innerHTML = `<em>Ошибка загрузки</em>`;
+            return;
+        }
+    }
+    
+    // Применяем фильтр по году
+    let displayPhotos = photos;
+    if (yearFilterActive) {
+        displayPhotos = getPhotosByLocationAndYear(locId, selectedMin, selectedMax);
+    }
+    
+    // Формируем HTML
+    let html = `<b>${locName}</b><br>`;
+    
+    if (displayPhotos.length === 0) {
+        html += `<em class="popup-empty">${yearFilterActive ? 'Нет фото в выбранном периоде' : 'Нет опубликованных фото'}</em>`;
+    } else {
+        html += '<div class="popup-gallery">';
+        displayPhotos.slice(0, 5).forEach(photo => {
+            html += `<div class="popup-gallery-item">
+                <img src="${photo.image}" class="popup-img" loading="lazy">
+                <div class="popup-year">${photo.year}</div>
+                ${photo.description ? `<div class="popup-desc">${photo.description}</div>` : ''}
+            </div>`;
+        });
+        if (displayPhotos.length > 5) {
+            html += `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">+ ещё ${displayPhotos.length - 5}</div>`;
+        }
+        html += '</div>';
+    }
+    
+    // Кнопки
+    html += `<div class="popup-actions" style="display:flex;justify-content:center;gap:5px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn-add" onclick="openUploadModal(${locId}, '${locName.replace(/'/g, "\\'")}')">+ Добавить фото</button>
+        ${displayPhotos.length >= 2 ? `<button class="btn-compare" onclick="openCompare(${locId}, '${locName.replace(/'/g, "\\'")}')">⇔ Сравнить</button>` : ''}
+    </div>`;
+    
+    container.innerHTML = html;
+}
+
+// Обработчик: подгрузка фото при движении карты (для фильтрации)
+map.on('moveend', async () => {
+    if (!yearFilterActive) return; // Не нужно, если фильтр не активен
+    
+    const bounds = map.getBounds();
+    for (const feature of allLocationsData) {
+        const props = feature.properties || {};
+        const locId = props.id || feature.id;
+        const coords = locationCoords[locId];
+        if (!coords) continue;
+        
+        if (bounds.contains([coords.lat, coords.lon]) && !photosDataCache[locId]) {
+            try {
+                const resp = await fetch(`/api/photos/?location=${locId}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    photosDataCache[locId] = Array.isArray(data) ? data : (data.results || []);
+                    // Перерисовываем маркеры если фильтр активен
+                    applyMapYearFilter();
+                }
+            } catch (e) {
+                console.warn(`Не удалось загрузить фото для ${locId}`);
+            }
+        }
+    }
+});
 
 // === ФУНКЦИОНАЛ ДОБАВЛЕНИЯ ФОТО ===
 const addPhotoBtn = document.getElementById('addPhotoBtn');
@@ -2552,6 +2707,8 @@ function initYearTimeline() {
         timelineConfig.maxYear = Math.max(...years);
         timelineConfig.selectedMin = timelineConfig.minYear;
         timelineConfig.selectedMax = timelineConfig.maxYear;
+                // Сбрасываем флаг фильтра при инициализации
+        yearFilterActive = false;
     }
     
     // Обновляем лейблы
@@ -2603,13 +2760,20 @@ function updateTimelineDisplay() {
 }
 
 function applyYearFilter() {
-    // Интегрируем с существующей системой фильтров
-    const yearFilter = document.getElementById('filterYear');
-    // Сохраняем текущий выбор в селекте (если нужно)
-    // Но основной фильтр применяем через нашу логику
+    // 1. Фильтруем фото в сайдбаре (через переопределённую applyFilters)
+    applyFilters();
     
-    // Фильтруем allPhotos по году и перерендериваем
-    applyFilters(); // Существующая функция уже учитывает yearFilter, но мы добавим свою логику
+    // 2. Фильтруем маркеры на карте
+    applyMapYearFilter();
+    
+    // 3. Если открыта модалка локации — обновляем её
+    if (locationPhotosModal.style.display === 'flex') {
+        const currentLocId = currentLocationPhotos[0]?.location;
+        const currentLocName = locationPhotosTitle.textContent;
+        if (currentLocId) {
+            openLocationPhotosModal(currentLocId, currentLocName);
+        }
+    }
 }
 
 // Переопределяем applyFilters для учёта диапазона лет
