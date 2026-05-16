@@ -105,14 +105,15 @@
 
         /* ========== SIDEBAR ========== */
         .sidebar {
-            position: fixed; top: 0; left: 0; width: clamp(320px, var(--sidebar-width, 360px), 760px); height: 100vh;
+            position: fixed; top: 0; left: 0; width: min(clamp(320px, var(--sidebar-width, 360px), 760px), calc(100vw - 56px)); height: 100vh;
             background: var(--bg-primary);
             box-shadow: 4px 0 24px rgba(0,0,0,0.05);
             z-index: 1001; display: flex; flex-direction: column;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border-right: 1px solid var(--border-color);
+            overflow: visible;
         }
-        .sidebar.hidden { transform: translateX(calc(-1 * clamp(320px, var(--sidebar-width, 360px), 760px))); }
+        .sidebar.hidden { transform: translateX(calc(-1 * min(clamp(320px, var(--sidebar-width, 360px), 760px), calc(100vw - 56px)))); }
         .sidebar-resizer {
             position: absolute; top: 0; right: -5px; width: 10px; height: 100%;
             cursor: ew-resize; z-index: 1003;
@@ -137,20 +138,24 @@
 
         .sidebar-content {
             padding: 20px;
-            flex: 1; /* Занимает все свободное место */
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
-            align-content: start;
-            gap: 15px;
-            height: 100%; /* Важно: растягиваем на всю высоту родителя */
-            overflow: hidden; /* Скрываем вылезающее содержимое */
-            min-height: 0; /* Фикс для Flexbox в Firefox/Chrome */
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            height: 100%;
+            overflow: hidden;
+            min-height: 0;
         }
         
-        .sidebar-header { margin-bottom: 5px; }
+        .sidebar-header {
+            margin-bottom: 2px;
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
         .sidebar-header i { color: var(--accent-primary); }
 
-        .sidebar-search { position: relative; }
+        .sidebar-search { position: relative; z-index: 15; }
         .search-input-wrapper {
             display: flex; align-items: center; background: var(--bg-secondary);
             border-radius: var(--radius-sm); padding: 0 12px;
@@ -176,15 +181,43 @@
         .search-result-item:hover { background: var(--bg-secondary); color: var(--accent-primary); }
         .search-no-results { padding: 12px 14px; color: var(--text-secondary); font-style: italic; font-size: 13px; }
 
+        .sidebar-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 0;
+        }
+        .sidebar-filter-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            min-width: 0;
+        }
+        .sidebar-filter-row.compact {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+        }
+        .sidebar-filter-row .form-control,
+        .sidebar-filter-row .btn {
+            min-width: 0;
+        }
+        .sidebar-section-title {
+            margin: 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+        }
+
         .photos-list {
-            flex: 1; /* Занимает всё оставшееся место после заголовков и фильтров */
-            overflow-y: auto; /* Включает вертикальную прокрутку */
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             gap: 16px;
             margin-top: 10px;
-            padding-right: 4px; /* Место под скроллбар */
-            min-height: 0; /* Критически важно для работы flex-скролла */
+            padding-right: 6px;
+            min-height: 0;
         }
         
         .photo-card {
@@ -486,6 +519,23 @@
             z-index: 2;
         }
         @media (max-width: 760px) {
+            .sidebar {
+                width: min(100vw - 48px, 420px);
+            }
+            .sidebar.hidden {
+                transform: translateX(calc(-1 * min(100vw - 48px, 420px)));
+            }
+            .sidebar-content {
+                padding: 16px;
+                gap: 12px;
+            }
+            .sidebar-filter-row,
+            .sidebar-filter-row.compact {
+                grid-template-columns: 1fr;
+            }
+            .photos-list {
+                gap: 12px;
+            }
             .photo-viewer-layout { grid-template-columns: 1fr; }
             .photo-viewer-media { min-height: 320px; }
             .photo-viewer-side { border-left: none; border-top: 1px solid var(--border-color); }
@@ -581,30 +631,30 @@
         </div>
         
         <!-- Фильтры -->
-<div style="margin-top: 5px;">
-    <div style="display: flex; gap: 8px; margin-bottom: 5px;">
-        <select id="filterCountry" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="onCountryChanged()">
-            <option value="">🌍 Все страны</option>
-        </select>
-        <select id="filterCity" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="applyFilters()">
-            <option value="">🏙️ Все города</option>
-        </select>
-    </div>
-    <div style="display: flex; gap: 8px;">
-        <select id="filterType" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="applyFilters()">
-            <option value="">📂 Все типы</option>
-        </select>
-        <select id="filterYear" class="form-control filter-select" style="flex:1; font-size:12px; padding:6px 8px;" onchange="applyFilters()">
-            <option value="">📅 Все годы</option>
-        </select>
-        <button class="btn btn-secondary btn-sm" onclick="clearFilters()" title="Сбросить фильтры" style="padding:6px 10px; font-size:14px;">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
-</div>
+        <div class="sidebar-filters">
+            <div class="sidebar-filter-row">
+                <select id="filterCountry" class="form-control filter-select" style="font-size:12px; padding:6px 8px;" onchange="onCountryChanged()">
+                    <option value="">🌍 Все страны</option>
+                </select>
+                <select id="filterCity" class="form-control filter-select" style="font-size:12px; padding:6px 8px;" onchange="applyFilters()">
+                    <option value="">🏙️ Все города</option>
+                </select>
+            </div>
+            <div class="sidebar-filter-row compact">
+                <select id="filterType" class="form-control filter-select" style="font-size:12px; padding:6px 8px;" onchange="applyFilters()">
+                    <option value="">📂 Все типы</option>
+                </select>
+                <select id="filterYear" class="form-control filter-select" style="font-size:12px; padding:6px 8px;" onchange="applyFilters()">
+                    <option value="">📅 Все годы</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearFilters()" title="Сбросить фильтры" style="padding:6px 10px; font-size:14px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
 
-<h3 style="margin: 10px 0; font-size: 14px; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Фотографии</h3>
-<div class="photos-list" id="photosList"></div>
+        <h3 class="sidebar-section-title">Фотографии</h3>
+        <div class="photos-list" id="photosList"></div>
     </div>
 </div>
 
@@ -1489,14 +1539,18 @@
         event.preventDefault();
         document.body.style.cursor = 'ew-resize';
         const resize = (moveEvent) => {
-            const width = Math.max(320, Math.min(760, moveEvent.clientX));
+            const maxWidth = Math.min(760, window.innerWidth - 56);
+            const minWidth = Math.min(320, maxWidth);
+            const width = Math.max(minWidth, Math.min(maxWidth, moveEvent.clientX));
             sidebar.style.setProperty('--sidebar-width', `${width}px`);
             localStorage.setItem('sidebarWidth', String(width));
+            map.invalidateSize();
         };
         const stop = () => {
             document.body.style.cursor = '';
             window.removeEventListener('mousemove', resize);
             window.removeEventListener('mouseup', stop);
+            map.invalidateSize();
         };
         window.addEventListener('mousemove', resize);
         window.addEventListener('mouseup', stop);
@@ -1504,7 +1558,9 @@
 
     const savedSidebarWidth = Number(localStorage.getItem('sidebarWidth'));
     if (savedSidebarWidth) {
-        sidebar.style.setProperty('--sidebar-width', `${Math.max(320, Math.min(760, savedSidebarWidth))}px`);
+        const maxWidth = Math.min(760, window.innerWidth - 56);
+        const minWidth = Math.min(320, maxWidth);
+        sidebar.style.setProperty('--sidebar-width', `${Math.max(minWidth, Math.min(maxWidth, savedSidebarWidth))}px`);
     }
 
     async function resolveLocationMeta(locId) {
