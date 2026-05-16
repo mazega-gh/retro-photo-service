@@ -103,17 +103,19 @@
             margin-right: 6px; font-weight: 700; letter-spacing: 0.5px;
         }
 
-        /* ========== SIDEBAR ========== */
-        .sidebar {
-            position: fixed; top: 0; left: 0; width: min(clamp(320px, var(--sidebar-width, 360px), 760px), calc(100vw - 56px)); height: 100vh;
-            background: var(--bg-primary);
-            box-shadow: 4px 0 24px rgba(0,0,0,0.05);
-            z-index: 1001; display: flex; flex-direction: column;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border-right: 1px solid var(--border-color);
-            overflow: visible;
-        }
-        .sidebar.hidden { transform: translateX(calc(-1 * min(clamp(320px, var(--sidebar-width, 360px), 760px), calc(100vw - 56px)))); }
+/* ========== SIDEBAR ========== */
+         .sidebar {
+             position: fixed; top: 0; left: 0; width: var(--sidebar-width, 360px); height: 100vh;
+             background: var(--bg-primary);
+             box-shadow: 4px 0 24px rgba(0,0,0,0.05);
+             z-index: 1001; display: flex; flex-direction: column;
+             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+             border-right: 1px solid var(--border-color);
+             overflow: hidden;
+             max-width: 760px;
+             min-width: 320px;
+         }
+         .sidebar.hidden { transform: translateX(calc(-1 * var(--sidebar-width, 360px))); }
         .sidebar-resizer {
             position: absolute; top: 0; right: -5px; width: 10px; height: 100%;
             cursor: ew-resize; z-index: 1003;
@@ -145,6 +147,7 @@
             height: 100%;
             overflow: hidden;
             min-height: 0;
+            contain: layout;
         }
         
         .sidebar-header {
@@ -212,12 +215,13 @@
             flex: 1;
             overflow-y: auto;
             overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 16px;
             margin-top: 10px;
             padding-right: 6px;
             min-height: 0;
+            align-content: start;
         }
         
         .photo-card {
@@ -227,7 +231,21 @@
             overflow: hidden;
             cursor: pointer;
             transition: all 0.2s ease;
-            flex-shrink: 0; /* Запрещаем карточке сжиматься */
+            width: 100%;
+            display: block;
+            /* ДОБАВИТЬ: */
+            min-height: 220px; /* 180px изображение + 12px padding + 12px padding + 16px текст */
+        }
+        
+       .photo-card > div:first-child {
+            position: relative;
+            height: 180px;  /* Фиксируем высоту обёртки */
+            display: block; /* Гарантируем блочное отображение */
+            width: 100%;    /* Растягиваем на всю ширину карточки */
+        }
+        
+        .photo-card-info {
+            padding: 12px;
         }
         .photo-card:hover {
             transform: translateY(-2px);
@@ -236,9 +254,11 @@
         }
         .photo-card img {
             width: 100%;
-            height: 150px; /* Фиксированная высота, чтобы все были одинаковые */
-            object-fit: cover; /* Обрезает лишнее, сохраняя пропорции */
+            height: 180px;
+            object-fit: cover;
             display: block;
+            /* ДОБАВИТЬ: */
+            flex-shrink: 0; /* Запрещаем сжатие изображения */
         }
         .photo-card-info {
             padding: 12px;
@@ -521,9 +541,11 @@
         @media (max-width: 760px) {
             .sidebar {
                 width: min(100vw - 48px, 420px);
+                min-width: 280px;
+                max-width: calc(100vw - 48px);
             }
             .sidebar.hidden {
-                transform: translateX(calc(-1 * min(100vw - 48px, 420px)));
+                transform: translateX(calc(-1 * var(--sidebar-width, 360px)));
             }
             .sidebar-content {
                 padding: 16px;
@@ -534,7 +556,16 @@
                 grid-template-columns: 1fr;
             }
             .photos-list {
-                gap: 12px;
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                gap: 16px;
+                margin-top: 10px;
+                padding-right: 6px;
+                min-height: 0;
+                align-content: start;
             }
             .photo-viewer-layout { grid-template-columns: 1fr; }
             .photo-viewer-media { min-height: 320px; }
@@ -600,11 +631,177 @@
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         object-fit: cover;
         }
+
+
+
+        /* ========== YEAR TIMELINE SLIDER ========== */
+        .year-timeline {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(90vw, 700px);
+            max-width: 700px;
+            background: var(--bg-primary);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            padding: 16px 20px;
+            z-index: 999;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .year-timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .year-range-display {
+            font-weight: 600;
+            color: var(--accent-primary);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .year-timeline-track {
+            position: relative;
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 4px 0;
+        }
+
+        .year-timeline-progress {
+            position: absolute;
+            height: 100%;
+            background: var(--accent-primary);
+            border-radius: 3px;
+            pointer-events: none;
+        }
+
+        .year-marker {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: var(--bg-primary);
+            border: 3px solid var(--accent-primary);
+            border-radius: 50%;
+            cursor: ew-resize;
+            z-index: 2;
+            transition: transform 0.1s, box-shadow 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .year-marker:hover,
+        .year-marker.dragging {
+            transform: translate(-50%, -50%) scale(1.15);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .year-marker::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+        }
+
+        .year-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .year-timeline-toggle {
+            position: absolute;
+            bottom: -48px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-full);
+            padding: 6px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+        }
+
+        .year-timeline-toggle:hover {
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .year-timeline.collapsed {
+            padding: 8px 20px;
+        }
+
+        .year-timeline.collapsed .year-timeline-track,
+        .year-timeline.collapsed .year-labels,
+        .year-timeline.collapsed .year-timeline-header > span:first-child {
+            display: none;
+        }
+
+        .year-timeline.collapsed .year-timeline-header {
+            justify-content: center;
+        }
+
+        /* Скрытие на очень маленьких экранах */
+        @media (max-width: 480px) {
+            .year-timeline {
+                width: calc(100vw - 32px);
+                bottom: 16px;
+                padding: 12px 16px;
+            }
+            .year-marker {
+                width: 16px;
+                height: 16px;
+            }
+        }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
+
+<!-- Ползунок фильтрации по годам -->
+<div class="year-timeline" id="yearTimeline">
+    <button class="year-timeline-toggle" id="yearTimelineToggle" title="Свернуть/развернуть">
+        <i class="fas fa-chevron-down"></i>
+        <span>Фильтр по годам</span>
+    </button>
+    
+    <div class="year-timeline-header">
+        <span>Период съёмки:</span>
+        <span class="year-range-display" id="yearRangeDisplay">1800 — 2026</span>
+    </div>
+    
+    <div class="year-timeline-track" id="yearTrack">
+        <div class="year-timeline-progress" id="yearProgress"></div>
+        <div class="year-marker" id="yearMinMarker" data-side="min" title="Минимальный год"></div>
+        <div class="year-marker" id="yearMaxMarker" data-side="max" title="Максимальный год"></div>
+    </div>
+    
+    <div class="year-labels">
+        <span id="yearMinLabel">1800</span>
+        <span id="yearMaxLabel">2026</span>
+    </div>
+</div>
 
 <!-- Умная поисковая строка -->
 <div class="osm-search-container">
@@ -1538,13 +1735,27 @@
     sidebarResizer.addEventListener('mousedown', (event) => {
         event.preventDefault();
         document.body.style.cursor = 'ew-resize';
+        const startX = event.clientX;
+        const startWidth = sidebar.offsetWidth;
+        // Внутри resize-обработчика (строки ~1150-1170):
         const resize = (moveEvent) => {
             const maxWidth = Math.min(760, window.innerWidth - 56);
             const minWidth = Math.min(320, maxWidth);
-            const width = Math.max(minWidth, Math.min(maxWidth, moveEvent.clientX));
+            const delta = moveEvent.clientX - startX;
+            const width = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
+            
             sidebar.style.setProperty('--sidebar-width', `${width}px`);
             localStorage.setItem('sidebarWidth', String(width));
-            map.invalidateSize();
+        
+            requestAnimationFrame(() => {
+                map.invalidateSize();
+                const photosList = document.querySelector('.photos-list');
+                if (photosList) {
+                    photosList.style.display = 'none';
+                    void photosList.offsetHeight; // trigger reflow
+                    photosList.style.display = '';
+                }
+            });
         };
         const stop = () => {
             document.body.style.cursor = '';
@@ -2297,6 +2508,264 @@ function showAdjacentPhoto(direction) {
 
     checkAuth();
     loadData();
+
+    window.addEventListener('resize', () => {
+    // Ограничить ширину сайдбара при изменении размера окна
+    const sidebar = document.getElementById('sidebar');
+    const currentWidth = parseInt(getComputedStyle(sidebar).getPropertyValue('--sidebar-width')) || 360;
+    const maxWidth = Math.min(760, window.innerWidth - 56);
+    const minWidth = 320;
+    const newWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
+    sidebar.style.setProperty('--sidebar-width', `${newWidth}px`);
+    localStorage.setItem('sidebarWidth', String(newWidth));
+    map.invalidateSize();
+});
+
+
+// ===== YEAR TIMELINE SLIDER =====
+const yearTimeline = document.getElementById('yearTimeline');
+const yearTrack = document.getElementById('yearTrack');
+const yearProgress = document.getElementById('yearProgress');
+const yearMinMarker = document.getElementById('yearMinMarker');
+const yearMaxMarker = document.getElementById('yearMaxMarker');
+const yearMinLabel = document.getElementById('yearMinLabel');
+const yearMaxLabel = document.getElementById('yearMaxLabel');
+const yearRangeDisplay = document.getElementById('yearRangeDisplay');
+const yearTimelineToggle = document.getElementById('yearTimelineToggle');
+
+let timelineConfig = {
+    minYear: 1800,
+    maxYear: 2026,
+    selectedMin: 1800,
+    selectedMax: 2026,
+    isDragging: null,
+    trackWidth: 0,
+    trackLeft: 0
+};
+
+// Инициализация слайдера после загрузки фото
+function initYearTimeline() {
+    // Получаем реальные мин/макс годы из загруженных фото
+    const years = allPhotos.map(p => parseInt(p.year)).filter(y => !isNaN(y));
+    if (years.length > 0) {
+        timelineConfig.minYear = Math.min(...years);
+        timelineConfig.maxYear = Math.max(...years);
+        timelineConfig.selectedMin = timelineConfig.minYear;
+        timelineConfig.selectedMax = timelineConfig.maxYear;
+    }
+    
+    // Обновляем лейблы
+    yearMinLabel.textContent = timelineConfig.minYear;
+    yearMaxLabel.textContent = timelineConfig.maxYear;
+    updateTimelineDisplay();
+    
+    // Обновляем размеры трека
+    updateTrackMetrics();
+}
+
+function updateTrackMetrics() {
+    const rect = yearTrack.getBoundingClientRect();
+    timelineConfig.trackWidth = rect.width;
+    timelineConfig.trackLeft = rect.left;
+}
+
+function yearToPosition(year) {
+    const { minYear, maxYear, trackWidth } = timelineConfig;
+    const percent = (year - minYear) / (maxYear - minYear || 1);
+    return percent * trackWidth;
+}
+
+function positionToYear(position) {
+    const { minYear, maxYear, trackWidth } = timelineConfig;
+    const percent = Math.max(0, Math.min(1, position / trackWidth));
+    return Math.round(minYear + percent * (maxYear - minYear));
+}
+
+function updateTimelineDisplay() {
+    const { minYear, maxYear, selectedMin, selectedMax, trackWidth } = timelineConfig;
+    
+    const minPos = yearToPosition(selectedMin);
+    const maxPos = yearToPosition(selectedMax);
+    
+    // Позиционируем маркеры
+    yearMinMarker.style.left = `${minPos}px`;
+    yearMaxMarker.style.left = `${maxPos}px`;
+    
+    // Обновляем прогресс-бар
+    yearProgress.style.left = `${minPos}px`;
+    yearProgress.style.width = `${maxPos - minPos}px`;
+    
+    // Обновляем текст диапазона
+    yearRangeDisplay.textContent = `${selectedMin} — ${selectedMax}`;
+    
+    // Применяем фильтр
+    applyYearFilter();
+}
+
+function applyYearFilter() {
+    // Интегрируем с существующей системой фильтров
+    const yearFilter = document.getElementById('filterYear');
+    // Сохраняем текущий выбор в селекте (если нужно)
+    // Но основной фильтр применяем через нашу логику
+    
+    // Фильтруем allPhotos по году и перерендериваем
+    applyFilters(); // Существующая функция уже учитывает yearFilter, но мы добавим свою логику
+}
+
+// Переопределяем applyFilters для учёта диапазона лет
+const originalApplyFilters = applyFilters;
+applyFilters = function() {
+    const typeFilter = document.getElementById('filterType').value;
+    const yearSelect = document.getElementById('filterYear').value; // отдельный селект года
+    const countryFilter = document.getElementById('filterCountry').value;
+    const cityFilter = document.getElementById('filterCity').value;
+    
+    let filtered = allPhotos;
+    
+    // Фильтр по локации
+    if (currentFilterLocId) {
+        filtered = filtered.filter(p => String(p.location) === String(currentFilterLocId));
+    }
+    
+    // Фильтр по типу
+    if (typeFilter) {
+        filtered = filtered.filter(p => (p.location_type_name || p.location_type) === typeFilter);
+    }
+    
+    // Фильтр по диапазону лет (наш новый)
+    filtered = filtered.filter(p => {
+        const year = parseInt(p.year);
+        return !isNaN(year) && year >= timelineConfig.selectedMin && year <= timelineConfig.selectedMax;
+    });
+    
+    // Фильтр по конкретному году из селекта (если выбран)
+    if (yearSelect) {
+        filtered = filtered.filter(p => String(p.year) === yearSelect);
+    }
+    
+    // Фильтр по стране/городу
+    if (countryFilter || cityFilter) {
+        filtered = filtered.filter(p => {
+            const meta = locationMetaCache[p.location] || { country: '', city: '' };
+            if (countryFilter && meta.country !== countryFilter) return false;
+            if (cityFilter && meta.city !== cityFilter) return false;
+            return true;
+        });
+    }
+    
+    renderPhotos(filtered);
+};
+
+// Обработчики перетаскивания маркеров
+function startDrag(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    timelineConfig.isDragging = e.target.dataset.side;
+    e.target.classList.add('dragging');
+    
+    updateTrackMetrics();
+    
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', stopDrag);
+    document.addEventListener('touchmove', onDrag, { passive: false });
+    document.addEventListener('touchend', stopDrag);
+}
+
+function onDrag(e) {
+    if (!timelineConfig.isDragging) return;
+    e.preventDefault();
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    let position = clientX - timelineConfig.trackLeft;
+    position = Math.max(0, Math.min(timelineConfig.trackWidth, position));
+    
+    let newYear = positionToYear(position);
+    
+    // Ограничиваем, чтобы маркеры не пересекались
+    if (timelineConfig.isDragging === 'min') {
+        newYear = Math.min(newYear, timelineConfig.selectedMax);
+        timelineConfig.selectedMin = newYear;
+    } else {
+        newYear = Math.max(newYear, timelineConfig.selectedMin);
+        timelineConfig.selectedMax = newYear;
+    }
+    
+    updateTimelineDisplay();
+}
+
+function stopDrag() {
+    if (timelineConfig.isDragging) {
+        yearMinMarker.classList.remove('dragging');
+        yearMaxMarker.classList.remove('dragging');
+        timelineConfig.isDragging = null;
+        
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        document.removeEventListener('touchmove', onDrag);
+        document.removeEventListener('touchend', stopDrag);
+    }
+}
+
+// Клик по треку для быстрой установки диапазона
+yearTrack.addEventListener('click', (e) => {
+    if (e.target.classList.contains('year-marker')) return;
+    
+    updateTrackMetrics();
+    const rect = yearTrack.getBoundingClientRect();
+    const position = e.clientX - rect.left;
+    const clickedYear = positionToYear(position);
+    
+    // Сдвигаем ближайший маркер
+    const distMin = Math.abs(clickedYear - timelineConfig.selectedMin);
+    const distMax = Math.abs(clickedYear - timelineConfig.selectedMax);
+    
+    if (distMin < distMax) {
+        timelineConfig.selectedMin = Math.min(clickedYear, timelineConfig.selectedMax);
+    } else {
+        timelineConfig.selectedMax = Math.max(clickedYear, timelineConfig.selectedMin);
+    }
+    
+    updateTimelineDisplay();
+});
+
+// События для маркеров
+yearMinMarker.addEventListener('mousedown', startDrag);
+yearMaxMarker.addEventListener('mousedown', startDrag);
+yearMinMarker.addEventListener('touchstart', startDrag, { passive: false });
+yearMaxMarker.addEventListener('touchstart', startDrag, { passive: false });
+
+// Сворачивание/разворачивание
+yearTimelineToggle.addEventListener('click', () => {
+    yearTimeline.classList.toggle('collapsed');
+    const icon = yearTimelineToggle.querySelector('i');
+    const text = yearTimelineToggle.querySelector('span');
+    
+    if (yearTimeline.classList.contains('collapsed')) {
+        icon.className = 'fas fa-chevron-up';
+        text.textContent = 'Показать фильтр';
+    } else {
+        icon.className = 'fas fa-chevron-down';
+        text.textContent = 'Фильтр по годам';
+    }
+});
+
+// Обновление при ресайзе окна
+window.addEventListener('resize', () => {
+    if (!yearTimeline.classList.contains('collapsed')) {
+        updateTrackMetrics();
+        updateTimelineDisplay();
+    }
+});
+
+// Инициализируем после загрузки данных
+const originalLoadData = loadData;
+loadData = async function() {
+    await originalLoadData();
+    initYearTimeline();
+};
+
+
 </script>
 </body>
 </html>
