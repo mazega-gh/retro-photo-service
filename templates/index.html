@@ -773,6 +773,195 @@
                 height: 16px;
             }
         }
+
+        /* ========== PROFILE MODAL ========== */
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.profile-avatar-large {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 24px;
+    font-family: 'Inter', sans-serif;
+    flex-shrink: 0;
+}
+
+.profile-info h4 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+}
+
+.profile-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.profile-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.profile-badge.admin {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.profile-badge.moderator {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 20px;
+}
+
+.profile-stat {
+    text-align: center;
+}
+
+.profile-stat-value {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent-primary);
+    font-family: 'Inter', sans-serif;
+}
+
+.profile-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.profile-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-section-title i {
+    color: var(--accent-primary);
+}
+
+.profile-photos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.profile-photo-item {
+    position: relative;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    aspect-ratio: 1;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.profile-photo-item:hover {
+    border-color: var(--accent-primary);
+}
+
+.profile-photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.profile-photo-year {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.profile-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.profile-empty i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.profile-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.profile-actions .btn {
+    flex: 1;
+}
+
+/* Адаптив для профиля */
+@media (max-width: 480px) {
+    .profile-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    .profile-stats {
+        grid-template-columns: 1fr;
+    }
+    .profile-photos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    }
+    .profile-actions {
+        flex-direction: column;
+    }
+}
     </style>
 </head>
 <body>
@@ -907,9 +1096,7 @@
         <div id="profileContent">
             <p>Загрузка...</p>
         </div>
-        <div class="modal-actions" style="justify-content: center; margin-top: 15px;">
-            <button class="btn btn-primary" onclick="closeProfileModal()">Закрыть</button>
-        </div>
+        
     </div>
 </div>
 
@@ -1540,57 +1727,144 @@
     });
 
     // --- ПРОФИЛЬ ---
-    async function openProfileModal() {
-        profileModal.style.display = 'flex';
-        if (!currentUser) {
-            document.getElementById('profileContent').innerHTML = '<p>Необходимо войти в систему</p>';
-            return;
+    // --- ПРОФИЛЬ (улучшенная версия) ---
+async function openProfileModal() {
+    profileModal.style.display = 'flex';
+    
+    if (!currentUser) {
+        document.getElementById('profileContent').innerHTML = `
+            <div class="profile-empty">
+                <i class="fas fa-user-slash"></i>
+                <p>Необходимо войти в систему</p>
+                <button class="btn btn-primary" onclick="closeProfileModal(); openAuthModal();" style="margin-top: 12px;">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    try {
+        // Загружаем данные пользователя и фото
+        const [userResp, photosResp] = await Promise.all([
+            fetch('/api/user/'),
+            fetch('/api/photos/')
+        ]);
+        
+        const userData = await userResp.json();
+        const allPhotosData = await photosResp.json();
+        const allPhotos = Array.isArray(allPhotosData) ? allPhotosData : (allPhotosData.results || []);
+        const userPhotos = allPhotos.filter(p => p.owner === userData.id);
+        
+        // Статистика
+        const totalPhotos = userPhotos.length;
+        const publishedPhotos = userPhotos.filter(p => p.status_name === 'Опубликовано').length;
+        const pendingPhotos = userPhotos.filter(p => p.status_name === 'На модерации').length;
+        const registeredDate = userData.date_joined ? new Date(userData.date_joined).toLocaleDateString('ru-RU') : '—';
+        
+        // Аватар: инициалы
+        const initial = userData.username?.charAt(0).toUpperCase() || '?';
+        
+        // Бейджи ролей
+        let badgesHtml = '';
+        if (userData.is_admin) {
+            badgesHtml += `<span class="profile-badge admin"><i class="fas fa-crown"></i> Администратор</span>`;
         }
-        try {
-            const resp = await fetch('/api/user/');
-            const userData = await resp.json();
-            const allPhotos = await (await fetch('/api/photos/')).json();
-            const photos = Array.isArray(allPhotos) ? allPhotos : (allPhotos.results || []);
-            const userPhotos = photos.filter(p => p.owner === userData.id);
-
-            const html = `
-                <p><strong>Имя:</strong> ${userData.username}</p>
-                <p><strong>Email:</strong> ${userData.email || 'не указан'}</p>
-                <p><strong>Загружено фото:</strong> ${userPhotos.length}</p>
-                <h4>Мои фотографии:</h4>
-                <div class="popup-gallery" style="max-height: 300px;">
-                    ${userPhotos.length > 0 ? userPhotos.map(p => `
-                        <div class="popup-gallery-item" data-locid="${p.location}" style="cursor:pointer;">
-                            <img src="${p.image}" class="popup-img" loading="lazy">
-                            <div class="popup-year">${p.year} (${p.status_name})</div>
-                            ${p.description ? `<div class="popup-desc">${p.description}</div>` : ''}
-                        </div>
-                    `).join('') : '<em>Нет загруженных фото</em>'}
+        if (userData.is_moderator) {
+            badgesHtml += `<span class="profile-badge moderator"><i class="fas fa-shield-alt"></i> Модератор</span>`;
+        }
+        
+        // Галерея фото
+        let photosGridHtml = '';
+        if (userPhotos.length > 0) {
+            // Сортируем по году (новые сверху)
+            const sortedPhotos = [...userPhotos].sort((a, b) => Number(b.year) - Number(a.year));
+            window.userPhotosCollection = sortedPhotos;
+            photosGridHtml = sortedPhotos.map(photo => `
+            <div class="profile-photo-item" onclick="showPhotoDetail(${photo.id}, window.userPhotosCollection)">
+                <img src="${photo.image}" alt="Фото ${photo.year}" loading="lazy">
+                <span class="profile-photo-year">${photo.year}</span>
+            </div>
+            `).join('');
+        } else {
+            photosGridHtml = `
+                <div class="profile-empty" style="grid-column: 1 / -1;">
+                    <i class="fas fa-camera"></i>
+                    <p>Вы ещё не загрузили ни одной фотографии</p>
+                    <button class="btn btn-primary" onclick="closeProfileModal(); document.getElementById('addPhotoBtn').click();" style="margin-top: 12px;">
+                        <i class="fas fa-plus"></i> Добавить первое фото
+                    </button>
                 </div>
             `;
-            document.getElementById('profileContent').innerHTML = html;
-
-            // При клике на фото в профиле переходим к маркеру
-            document.querySelectorAll('#profileContent .popup-gallery-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const locId = item.dataset.locid;
-                    if (locId) {
-                        const marker = markersMap.get(String(locId));
-                        if (marker) {
-                            closeProfileModal();
-                            markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
-                        }
-                    }
-                });
-            });
-        } catch (err) {
-            document.getElementById('profileContent').innerHTML = '<p>Не удалось загрузить профиль</p>';
         }
+        
+        // Формируем полный HTML
+        const html = `
+            <div class="profile-header">
+                <div class="profile-avatar-large">${initial}</div>
+                <div class="profile-info">
+                    <h4>${escapeHtml(userData.username)} ${badgesHtml}</h4>
+                    <div class="profile-meta">
+                        ${userData.email ? `<div><i class="fas fa-envelope"></i> ${escapeHtml(userData.email)}</div>` : ''}
+                        <div><i class="fas fa-calendar"></i> Регистрация: ${registeredDate}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-stats">
+                <div class="profile-stat">
+                    <span class="profile-stat-value">${totalPhotos}</span>
+                    <span class="profile-stat-label">Всего фото</span>
+                </div>
+                <div class="profile-stat">
+                    <span class="profile-stat-value" style="color: #059669;">${publishedPhotos}</span>
+                    <span class="profile-stat-label">Опубликовано</span>
+                </div>
+                <div class="profile-stat">
+                    <span class="profile-stat-value" style="color: #d97706;">${pendingPhotos}</span>
+                    <span class="profile-stat-label">На проверке</span>
+                </div>
+            </div>
+            
+            <h4 class="profile-section-title"><i class="fas fa-images"></i> Мои фотографии</h4>
+            <div class="profile-photos-grid">
+                ${photosGridHtml}
+            </div>
+            
+            <div class="profile-actions">
+                <button class="btn btn-secondary" onclick="closeProfileModal()">
+                    <i class="fas fa-times"></i> Закрыть
+                </button>
+                <button class="btn btn-primary" onclick="closeProfileModal(); document.getElementById('addPhotoBtn').click();">
+                    <i class="fas fa-plus"></i> Добавить фото
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('profileContent').innerHTML = html;
+        
+    } catch (err) {
+        console.error('Profile error:', err);
+        document.getElementById('profileContent').innerHTML = `
+            <div class="profile-empty">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Не удалось загрузить профиль</p>
+                <button class="btn btn-secondary" onclick="closeProfileModal()">Закрыть</button>
+            </div>
+        `;
     }
+}
 
     function closeProfileModal() {
         profileModal.style.display = 'none';
     }
+
+    // Закрытие профиля по клику на фон
+    profileModal.addEventListener('click', (e) => {
+        if (e.target === profileModal) {
+            closeProfileModal();
+        }
+    });
 
     // --- ЗАГРУЗКА ФОТО (формы) ---
     function openUploadModal(locId, locName) {
@@ -2700,24 +2974,35 @@ let timelineConfig = {
 
 // Инициализация слайдера после загрузки фото
 function initYearTimeline() {
-    // Получаем реальные мин/макс годы из загруженных фото
+    // 1. СНАЧАЛА обновляем метрики трека (критично для расчёта позиций!)
+    updateTrackMetrics();
+    
+    // 2. Получаем реальные мин/макс годы из загруженных фото
     const years = allPhotos.map(p => parseInt(p.year)).filter(y => !isNaN(y));
+    
     if (years.length > 0) {
         timelineConfig.minYear = Math.min(...years);
         timelineConfig.maxYear = Math.max(...years);
+        // ✅ Устанавливаем выбранный диапазон на ВЕСЬ доступный
         timelineConfig.selectedMin = timelineConfig.minYear;
         timelineConfig.selectedMax = timelineConfig.maxYear;
-                // Сбрасываем флаг фильтра при инициализации
-        yearFilterActive = false;
+    } else {
+        // Если фото нет — используем дефолтные значения
+        timelineConfig.minYear = 1800;
+        timelineConfig.maxYear = 2026;
+        timelineConfig.selectedMin = timelineConfig.minYear;
+        timelineConfig.selectedMax = timelineConfig.maxYear;
     }
     
-    // Обновляем лейблы
+    // 3. Сбрасываем флаг фильтра при инициализации
+    yearFilterActive = false;
+    
+    // 4. Обновляем текстовые лейблы
     yearMinLabel.textContent = timelineConfig.minYear;
     yearMaxLabel.textContent = timelineConfig.maxYear;
-    updateTimelineDisplay();
     
-    // Обновляем размеры трека
-    updateTrackMetrics();
+    // 5. ✅ ТОЛЬКО ТЕПЕРЬ обновляем отображение (маркеры встанут на свои места)
+    updateTimelineDisplay();
 }
 
 function updateTrackMetrics() {
@@ -2921,13 +3206,6 @@ window.addEventListener('resize', () => {
         updateTimelineDisplay();
     }
 });
-
-// Инициализируем после загрузки данных
-const originalLoadData = loadData;
-loadData = async function() {
-    await originalLoadData();
-    initYearTimeline();
-};
 
 
 </script>
