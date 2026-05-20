@@ -962,6 +962,75 @@
     .profile-actions {
         flex-direction: column;
     }
+
+    /* ========== AZIMUTH COMPASS ========== */
+.azimuth-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 10px;
+    margin-bottom: 15px;
+}
+
+.azimuth-canvas-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.azimuth-canvas {
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s;
+}
+
+.azimuth-canvas:hover {
+    transform: scale(1.02);
+}
+
+.azimuth-value {
+    font-family: 'Inter', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent-primary);
+    background: var(--bg-secondary);
+    padding: 8px 16px;
+    border-radius: var(--radius-full);
+    margin-top: 10px;
+    display: inline-block;
+}
+
+.azimuth-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 10px;
+    font-weight: normal;
+}
+
+.azimuth-direction {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 5px;
+}
+
+.azimuth-reset-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    transition: all 0.2s;
+}
+
+.azimuth-reset-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+
 }
     </style>
 </head>
@@ -1161,6 +1230,35 @@
     <div class="compare-ai-info" id="compareAiInfo"></div>
 </div>
 
+<!-- Модальное окно для создания новой локации -->
+<div class="modal-overlay" id="newLocationModal">
+    <div class="modal-box" style="max-width: 450px;">
+        <h3><i class="fas fa-map-marker-alt"></i> Новая локация</h3>
+        <p style="color: var(--text-secondary); font-size: 14px; text-align: center; margin-bottom: 20px;">
+            Выбранные координаты:
+            <br>
+            <strong id="newLocationCoords" style="color: var(--accent-primary); font-family: monospace;">—</strong>
+        </p>
+        <div class="form-group">
+            <label for="newLocationName">Название локации</label>
+            <input type="text" id="newLocationName" class="form-control" placeholder="Например: Ярославский вокзал" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label for="newLocationType">Тип локации (необязательно)</label>
+            <select id="newLocationType" class="form-control">
+                <option value="">— Без типа —</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeNewLocationModal()">Отмена</button>
+            <button class="btn btn-primary" id="confirmNewLocationBtn">Создать</button>
+        </div>
+    </div>
+</div>
+
+
+
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
@@ -1181,6 +1279,7 @@
     const locationPhotosGrid = document.getElementById('locationPhotosGrid');
     const downloadLocationPhotosBtn = document.getElementById('downloadLocationPhotosBtn');
     let currentLocationPhotos = [];
+    let pendingLocationCoords = null;  // Для хранения координат новой локации
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -2733,41 +2832,139 @@ function selectExistingLocation(id, name) {
     openUploadFormForLocation(numericId, name);
 }
 
+// Модальное окно для новой локации
+function showNewLocationModal(lat, lng) {
+    pendingLocationCoords = { lat, lng };
+    document.getElementById('newLocationCoords').innerHTML = `${lat.toFixed(6)}°, ${lng.toFixed(6)}°`;
+    document.getElementById('newLocationName').value = '';
+    document.getElementById('newLocationType').value = '';
+    
+    // Загружаем типы локаций
+    fetch('/api/admin/location-types/')
+        .then(res => res.json())
+        .then(data => {
+            const types = Array.isArray(data) ? data : (data.results || []);
+            const select = document.getElementById('newLocationType');
+            select.innerHTML = '<option value="">— Без типа —</option>' + 
+                types.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+        })
+        .catch(err => console.warn('Не удалось загрузить типы', err));
+    
+    document.getElementById('newLocationModal').style.display = 'flex';
+    document.getElementById('newLocationName').focus();
+}
+
+function closeNewLocationModal() {
+    document.getElementById('newLocationModal').style.display = 'none';
+    pendingLocationCoords = null;
+}
+
 function startNewLocationProcess() {
     hideAddPhotoModal();
-    alert('Кликните на карте, чтобы установить точку для новой локации.');
+    
+    // Создаем и показываем всплывающее сообщение на карте (вместо alert)
+    const popup = L.popup()
+        .setLatLng(map.getCenter())
+        .setContent('📍 Кликните на карте, чтобы выбрать место для новой локации')
+        .openOn(map);
+    
+    // Убираем сообщение через 4 секунды
+    setTimeout(() => {
+        map.closePopup();
+    }, 4000);
+    
     map.once('click', async function(e) {
+        map.closePopup(); // Закрываем сообщение, если кликнули раньше
+        
         const lat = e.latlng.lat;
         const lng = e.latlng.lng;
+        
+        // Проверяем, нет ли уже локации рядом
         try {
             const checkResp = await fetch(`/api/locations/check/?lat=${lat}&lng=${lng}`);
             const checkData = await checkResp.json();
             if (checkData.nearby && checkData.nearby.length > 0) {
                 const nearbyNames = checkData.nearby.map(loc => loc.name).join(', ');
-                alert(`Рядом уже есть: ${nearbyNames}. Пожалуйста, выберите одну из существующих точек.`);
-                return;  // Просто выходим, не создаём новую
+                // Тоже используем всплывающее сообщение вместо alert
+                const errorPopup = L.popup()
+                    .setLatLng([lat, lng])
+                    .setContent(`⚠️ Рядом уже есть: ${nearbyNames}. Выберите существующую точку.`)
+                    .openOn(map);
+                setTimeout(() => map.closePopup(), 3000);
+                return;
             }
         } catch (err) {
             // Если сервер не ответил, продолжаем
         }
-        const name = prompt('Введите название локации:');
-        if (!name) return;
-        const createResp = await fetch('/api/locations/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            body: JSON.stringify({
-                name: name,
-                coordinates: { type: 'Point', coordinates: [lng, lat] }
-            })
-        });
-        const newLocation = await createResp.json();
-        if (newLocation.id) {
-            openUploadFormForLocation(Number(newLocation.id), newLocation.name || name);
-        } else {
-            alert('Ошибка создания локации. Возможно, такое название уже существует.');
-        }
+        
+        // Показываем красивое модальное окно
+        showNewLocationModal(lat, lng);
     });
 }
+
+// Обработчик создания новой локации
+document.getElementById('confirmNewLocationBtn').addEventListener('click', async () => {
+    if (!pendingLocationCoords) {
+        closeNewLocationModal();
+        return;
+    }
+    
+    const name = document.getElementById('newLocationName').value.trim();
+    if (!name) {
+        alert('Пожалуйста, введите название локации');
+        document.getElementById('newLocationName').focus();
+        return;
+    }
+    
+    const typeId = document.getElementById('newLocationType').value;
+    
+    const body = {
+        name: name,
+        coordinates: {
+            type: 'Point',
+            coordinates: [pendingLocationCoords.lng, pendingLocationCoords.lat]
+        }
+    };
+    
+    if (typeId) {
+        body.location_type = parseInt(typeId);
+    }
+    
+    try {
+        const createResp = await fetch('/api/locations/', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRFToken': getCookie('csrftoken') 
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const newLocation = await createResp.json();
+        
+        if (newLocation.id) {
+            closeNewLocationModal();
+            openUploadFormForLocation(Number(newLocation.id), newLocation.name || name);
+            await loadData(); // Обновляем карту
+        } else {
+            alert('Ошибка создания локации: ' + (newLocation.error || 'Неизвестная ошибка'));
+        }
+    } catch (err) {
+        alert('Ошибка сети при создании локации');
+        console.error(err);
+    }
+});
+
+// Закрытие модалки по клику на фон и Escape
+newLocationModal.addEventListener('click', (e) => {
+    if (e.target === newLocationModal) closeNewLocationModal();
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && newLocationModal.style.display === 'flex') {
+        closeNewLocationModal();
+    }
+});
 
 function openUploadFormForLocation(locId, locName) {
     locId = Number(locId);
