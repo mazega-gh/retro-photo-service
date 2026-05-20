@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.contrib.gis.db import models as gis_models
 
 from locations.models import Location
 
@@ -41,6 +42,19 @@ class RetroPhoto(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created at')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated at')
+    shooting_point = gis_models.PointField(
+        srid=4326,
+        null=True,
+        blank=True,
+        verbose_name='Точка съёмки (где стоял фотограф)',
+        help_text='Географическая точка, откуда сделана фотография'
+    )
+    shooting_azimuth = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Азимут съёмки',
+        help_text='Направление камеры от точки съёмки в градусах (0-360)'
+    )
 
     class Meta:
         verbose_name = 'Archive photo'

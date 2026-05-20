@@ -17,6 +17,61 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
+
+        /* ========== MAP MODE TOGGLE ========== */
+.map-mode-toggle {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: var(--bg-primary);
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-color);
+    display: flex;
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    margin-top: 60px; /* чтобы был ниже поисковой строки */
+}
+
+@media (max-width: 768px) {
+    .map-mode-toggle {
+        top: auto;
+        bottom: 20px;
+        left: 20px;
+        transform: none;
+        margin-top: 0;
+    }
+}
+
+.mode-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border: none;
+    transition: all 0.2s;
+}
+
+.mode-btn:first-child {
+    border-radius: var(--radius-full) 0 0 var(--radius-full);
+}
+
+.mode-btn:last-child {
+    border-radius: 0 var(--radius-full) var(--radius-full) 0;
+}
+
+.mode-btn.active {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.mode-btn:hover:not(.active) {
+    background: var(--bg-secondary);
+    color: var(--accent-primary);
+}
         /* ========== MODERN VARIABLES ========== */
         :root {
             --bg-primary: #ffffff;
@@ -1071,6 +1126,12 @@
     <div class="osm-search-results" id="osmSearchResults"></div>
 </div>
 
+<!-- Переключатель режимов карты -->
+<div class="map-mode-toggle" id="mapModeToggle">
+    <button class="mode-btn active" data-mode="locations">🏛️ Локации</button>
+    <button class="mode-btn" data-mode="shooting">📍 Точки съёмки</button>
+</div>
+
 <!-- Боковая панель -->
 <div class="sidebar" id="sidebar">
     <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
@@ -1265,6 +1326,24 @@
 <script>
     console.log("🚀 Скрипт загружен");
 
+    // ===== ФУНКЦИИ ДЛЯ РАСЧЁТА АЗИМУТА =====
+function calculateDestinationPoint(lat, lng, bearing, distanceMeters) {
+    const R = 6371000; // Радиус Земли в метрах
+    const δ = distanceMeters / R;
+    const θ = bearing * Math.PI / 180; // Азимут в радианах
+    
+    const φ1 = lat * Math.PI / 180;
+    const λ1 = lng * Math.PI / 180;
+    
+    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+    
+    return {
+        lat: φ2 * 180 / Math.PI,
+        lng: λ2 * 180 / Math.PI
+    };
+}
+
     // ===== ГЛОБАЛЬНЫЕ ДАННЫЕ ДЛЯ ФИЛЬТРАЦИИ КАРТЫ =====
     let allLocationsData = []; // Кэш всех локаций для фильтрации
     let yearFilterActive = false; // Флаг: активен ли фильтр по годам
@@ -1280,6 +1359,164 @@
     const downloadLocationPhotosBtn = document.getElementById('downloadLocationPhotosBtn');
     let currentLocationPhotos = [];
     let pendingLocationCoords = null;  // Для хранения координат новой локации
+
+    let currentMapMode = 'locations'; // 'locations' или 'shooting'
+    let shootingPointsLayer = null;    // слой для точек съёмки
+    let shootingPointsData = [];       // данные точек съёмки
+    let uploadStep = 1;
+    let selectedLocationForUpload = null;
+    let selectedShootingPoint = null;
+    let selectedAzimuth = null;
+
+    // === РЕЖИМЫ КАРТЫ ===
+
+// Загрузка точек съёмки
+async function loadShootingPoints() {
+    try {
+        const response = await fetch('/api/photos/shooting-points/');
+        if (!response.ok) throw new Error('Failed to load shooting points');
+        shootingPointsData = await response.json();
+        return shootingPointsData;
+    } catch (error) {
+        console.error('Error loading shooting points:', error);
+        return [];
+    }
+}
+
+// Отображение точек съёмки на карте
+function showShootingPoints() {
+    if (shootingPointsLayer) {
+        map.removeLayer(shootingPointsLayer);
+    }
+    
+    shootingPointsLayer = L.layerGroup().addTo(map);
+    
+    shootingPointsData.forEach(point => {
+        // Создаём иконку с миниатюрой фото (как в первом режиме)
+        const customIcon = L.divIcon({
+            html: `<div style="background: var(--accent-primary); color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                        <img src="${point.image}" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>`,
+            iconSize: [40, 40],
+            className: 'shooting-marker',
+            popupAnchor: [0, -20]
+        });
+        
+        const marker = L.marker([point.shooting_lat, point.shooting_lon], { icon: customIcon });
+        
+        // Содержимое всплывающего окна
+        const popupContent = `
+            <div style="min-width: 200px; text-align: center;">
+                <img src="${point.image}" style="max-width: 180px; max-height: 120px; border-radius: 8px; margin-bottom: 8px; object-fit: cover;">
+                <div style="font-weight: bold;">${point.year} год</div>
+                <div style="font-size: 12px; color: #666;">${point.location_name}</div>
+                ${point.shooting_azimuth ? `<div style="font-size: 12px;">🧭 Азимут: ${Math.round(point.shooting_azimuth)}°</div>` : ''}
+                <div style="font-size: 12px; margin-top: 6px;">${point.description ? point.description.substring(0, 80) : ''}</div>
+                <button class="btn-add" style="margin-top: 8px; padding: 4px 10px;" onclick="showPhotoDetail(${point.id})">Подробнее</button>
+            </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+        
+        // Если есть азимут - рисуем линию направления
+        if (point.shooting_azimuth) {
+            const distance = 40; // длина линии в метрах
+            const toPoint = calculateDestinationPoint(point.shooting_lat, point.shooting_lon, point.shooting_azimuth, distance);
+            
+            // Основная линия (тонкая, полупрозрачная)
+            const azimuthLine = L.polyline([
+                [point.shooting_lat, point.shooting_lon],
+                [toPoint.lat, toPoint.lng]
+            ], {
+                color: '#000000',      // синий цвет
+                weight: 0.5,
+                opacity: 1
+            });
+            azimuthLine.addTo(shootingPointsLayer);
+            
+            // Стрелка на конце (маленький треугольник)
+            const arrowAngle = 20; // градусы
+            const arrowLength = 10; // метры
+            
+            // Вычисляем обратное направление для "перьев" стрелки
+            const backAngle1 = point.shooting_azimuth + 180 - arrowAngle;
+            const backAngle2 = point.shooting_azimuth + 180 + arrowAngle;
+            
+            const arrowPoint1 = calculateDestinationPoint(toPoint.lat, toPoint.lng, backAngle1, arrowLength);
+            const arrowPoint2 = calculateDestinationPoint(toPoint.lat, toPoint.lng, backAngle2, arrowLength);
+            
+            const arrowHead = L.polygon([
+                [toPoint.lat, toPoint.lng],
+                [arrowPoint1.lat, arrowPoint1.lng],
+                [arrowPoint2.lat, arrowPoint2.lng]
+            ], {
+                color: '#000000',
+                fillColor: '#000000',
+                fillOpacity: 1,
+                weight: 1,
+                opacity: 1
+            });
+            arrowHead.addTo(shootingPointsLayer);
+        }
+        
+        shootingPointsLayer.addLayer(marker);
+    });
+}
+
+// Скрыть точки съёмки
+function hideShootingPoints() {
+    if (shootingPointsLayer) {
+        map.removeLayer(shootingPointsLayer);
+        shootingPointsLayer = null;
+    }
+}
+
+// Переключение режима карты
+function setMapMode(mode) {
+    currentMapMode = mode;
+    
+    // Обновляем активную кнопку
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        if (btn.dataset.mode === mode) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    if (mode === 'locations') {
+        // Показываем маркеры локаций, скрываем точки съёмки
+        markerCluster.clearLayers();
+        // Восстанавливаем маркеры локаций из кэша
+        allLocationsData.forEach(feature => {
+            const props = feature.properties || {};
+            const locId = props.id || feature.id;
+            const marker = markersMap.get(String(locId));
+            if (marker && !markerCluster.hasLayer(marker)) {
+                markerCluster.addLayer(marker);
+            }
+        });
+        hideShootingPoints();
+    } else {
+        // Показываем точки съёмки, скрываем маркеры локаций
+        markerCluster.clearLayers();
+        if (shootingPointsData.length === 0) {
+            loadShootingPoints().then(() => showShootingPoints());
+        } else {
+            showShootingPoints();
+        }
+    }
+}
+
+// Инициализация переключателя
+function initMapModeToggle() {
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setMapMode(btn.dataset.mode);
+        });
+    });
+}
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -2760,36 +2997,53 @@ addPhotoModal.addEventListener('click', (e) => {
     if (e.target === addPhotoModal) hideAddPhotoModal();
 });
 
+// Модальное окно выбора локации (Шаг 1)
+let selectedLocationForPhoto = null; // Хранит выбранную локацию
+let newShootingPoint = null; // Хранит координаты точки съёмки для нового фото
+let newShootingAzimuth = null; // Хранит азимут
+
 function openAddPhotoModal() {
     if (!currentUser) {
         alert('Необходимо войти в систему');
         openAuthModal();
         return;
     }
+    
+    uploadStep = 1;
+    selectedLocationForUpload = null;
+    selectedShootingPoint = null;
+    selectedAzimuth = null;
+    
+    showUploadStep1();
+}
+
+function showUploadStep1() {
     const html = `
-        <h3>Добавить фотографию</h3>
-        <p>Выберите локацию или создайте новую точку на карте.</p>
+        <h3>📸 Добавить фотографию — Шаг 1 из 3</h3>
+        <p style="color: var(--text-secondary); font-size: 14px; text-align: center; margin-bottom: 20px;">
+            Выберите локацию (здание, место), к которому относится фотография.
+        </p>
         <div class="form-group">
             <label>Поиск существующей локации</label>
-            <input class="form-control" id="locSearchInput" placeholder="Введите название...">
-            <div id="locSearchResults" style="max-height:150px; overflow-y:auto; margin-top:5px;"></div>
+            <input class="form-control" id="step1SearchInput" placeholder="Введите название...">
+            <div id="step1SearchResults" style="max-height:150px; overflow-y:auto; margin-top:5px;"></div>
         </div>
         <div class="modal-actions" style="flex-direction: column; gap: 10px;">
             <button class="btn btn-secondary" onclick="hideAddPhotoModal()">Отмена</button>
-            <button class="btn btn-primary" id="createNewLocBtn">Создать новую точку на карте</button>
+            <button class="btn btn-primary" id="step1CreateNewBtn">+ Создать новую локацию</button>
         </div>
     `;
     showAddPhotoModal(html);
-
-    const locSearchInput = document.getElementById('locSearchInput');
-    const locSearchResults = document.getElementById('locSearchResults');
+    
+    const searchInput = document.getElementById('step1SearchInput');
+    const searchResults = document.getElementById('step1SearchResults');
     let searchTimeout;
-
-    locSearchInput.addEventListener('input', () => {
+    
+    searchInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
-        const query = locSearchInput.value.trim();
+        const query = searchInput.value.trim();
         if (query.length < 2) {
-            locSearchResults.innerHTML = '';
+            searchResults.innerHTML = '';
             return;
         }
         searchTimeout = setTimeout(async () => {
@@ -2799,38 +3053,359 @@ function openAddPhotoModal() {
             if (data.results?.features) features = data.results.features;
             else if (data.features) features = data.features;
             else if (Array.isArray(data)) features = data;
-            locSearchResults.innerHTML = features.slice(0, 5).map(loc => {
+            
+            searchResults.innerHTML = features.slice(0, 5).map(loc => {
                 const props = loc.properties || {};
                 const locId = props.id || loc.id;
                 const locName = props.name || 'Без названия';
-                if (!locId) return '';
-                return `<div class="search-result-item" style="padding:8px;" data-locid="${locId}" data-locname="${locName.replace(/"/g, '&quot;')}">${locName}</div>`;
-            }).filter(Boolean).join('');
-
-            document.querySelectorAll('#locSearchResults .search-result-item').forEach(item => {
-                item.addEventListener('click', function() {
-                    const id = this.dataset.locid;
-                    const name = this.dataset.locname;
-                    if (id) {
-                        selectExistingLocation(Number(id), name);
-                    }
+                return `<div class="search-result-item" data-locid="${locId}" data-locname="${locName.replace(/"/g, '&quot;')}" style="padding:8px; cursor:pointer;">📌 ${locName}</div>`;
+            }).join('');
+            
+            document.querySelectorAll('#step1SearchResults .search-result-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    selectedLocationForUpload = {
+                        id: Number(item.dataset.locid),
+                        name: item.dataset.locname
+                    };
+                    showUploadStep2();
                 });
             });
         }, 300);
     });
-
-    document.getElementById('createNewLocBtn').addEventListener('click', startNewLocationProcess);
+    
+    document.getElementById('step1CreateNewBtn').addEventListener('click', () => {
+        hideAddPhotoModal();
+        startNewLocationProcess();
+    });
 }
 
-function selectExistingLocation(id, name) {
-    const numericId = Number(id);
-    if (!numericId || isNaN(numericId)) {
-        alert('Ошибка: некорректный ID локации.');
-        return;
-    }
+function showUploadStep2() {
     hideAddPhotoModal();
-    openUploadFormForLocation(numericId, name);
+    
+    const popup = L.popup()
+        .setLatLng(map.getCenter())
+        .setContent(`📍 Локация: <strong>${escapeHtml(selectedLocationForUpload.name)}</strong><br>Теперь кликните на карте, чтобы указать точку, откуда сделана фотография.`)
+        .openOn(map);
+    
+    setTimeout(() => map.closePopup(), 5000);
+    
+    map.once('click', async function(e) {
+        map.closePopup();
+        selectedShootingPoint = { lat: e.latlng.lat, lng: e.latlng.lng };
+        showUploadStep3();
+    });
 }
+
+function showUploadStep3() {
+    const html = `
+        <h3>📸 Добавить фотографию — Шаг 3 из 3</h3>
+        <p style="color: var(--text-secondary); font-size: 13px; text-align: center; margin-bottom: 15px;">
+            Локация: <strong>${escapeHtml(selectedLocationForUpload.name)}</strong><br>
+            Точка съёмки: ${selectedShootingPoint.lat.toFixed(5)}°, ${selectedShootingPoint.lng.toFixed(5)}°
+        </p>
+        
+        <div class="form-group"><label>Год съёмки</label><input type="number" class="form-control" id="uploadYear" required></div>
+        <div class="form-group"><label>Фотография</label><input type="file" class="form-control" id="uploadImage" accept="image/*" required></div>
+        <div class="form-group"><label>Описание</label><textarea class="form-control" id="uploadDesc" rows="3"></textarea></div>
+        
+        <div class="form-group">
+            <label>Направление съёмки (азимут) — необязательно</label>
+            <div class="azimuth-container" id="azimuthContainerUpload">
+                <div class="azimuth-canvas-wrapper">
+                    <canvas id="azimuthCanvasUpload" width="180" height="180" class="azimuth-canvas"></canvas>
+                </div>
+                <div>
+                    <span class="azimuth-value" id="azimuthValueUpload">—</span>
+                    <span class="azimuth-label">градусов</span>
+                </div>
+                <div class="azimuth-direction" id="azimuthDirectionUpload"></div>
+                <button type="button" class="azimuth-reset-btn" id="azimuthResetBtnUpload">
+                    <i class="fas fa-undo-alt"></i> Сбросить
+                </button>
+            </div>
+            <input type="hidden" id="uploadAzimuth" value="">
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideAddPhotoModal()">Отмена</button>
+            <button class="btn btn-primary" id="submitFinalPhotoBtn">Загрузить</button>
+        </div>
+    `;
+    showAddPhotoModal(html);
+    
+    initUploadCompass();
+    
+    document.getElementById('submitFinalPhotoBtn').addEventListener('click', async () => {
+        const year = document.getElementById('uploadYear').value;
+        const image = document.getElementById('uploadImage').files[0];
+        const desc = document.getElementById('uploadDesc').value;
+        const azimuth = document.getElementById('uploadAzimuth').value;
+
+        console.log('📤 Отправка фото:');
+        console.log('  - год:', year);
+        console.log('  - локация ID:', selectedLocationForUpload.id);
+        console.log('  - точка съёмки:', selectedShootingPoint.lat, selectedShootingPoint.lng);
+        console.log('  - азимут:', azimuth);
+        
+        if (!year || !image) {
+            alert('Заполните обязательные поля (год и фотография)');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('year', year);
+        formData.append('image', image);
+        formData.append('description', desc);
+        formData.append('location', selectedLocationForUpload.id);
+        formData.append('shooting_lat_write', selectedShootingPoint.lat);
+        formData.append('shooting_lon_write', selectedShootingPoint.lng);
+        if (azimuth && azimuth !== '') {
+            formData.append('shooting_azimuth_write', azimuth);
+        }
+        
+        try {
+            const resp = await fetch('/api/photos/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: formData
+            });
+            if (resp.ok) {
+                alert('✅ Фото отправлено на модерацию!');
+                hideAddPhotoModal();
+                await loadAllPhotos();
+                renderPhotos();
+                await loadData();
+            } else {
+                const err = await resp.json();
+                alert('Ошибка: ' + JSON.stringify(err));
+            }
+        } catch (e) {
+            alert('Ошибка сети');
+        }
+    });
+}
+
+function initUploadCompass() {
+    let currentAzimuth = null;
+    
+    const canvas = document.getElementById('azimuthCanvasUpload');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const azimuthValueSpan = document.getElementById('azimuthValueUpload');
+    const azimuthDirectionSpan = document.getElementById('azimuthDirectionUpload');
+    const azimuthHidden = document.getElementById('uploadAzimuth');
+    const resetBtn = document.getElementById('azimuthResetBtnUpload');
+    
+    const size = 180;
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const radius = 75;
+    
+    function getDirectionFromAzimuth(az) {
+        if (az === null) return 'не указано';
+        const directions = [
+            { name: 'С', min: 348.75, max: 360, alias: 0 },
+            { name: 'С', min: 0, max: 11.25, alias: 360 },
+            { name: 'ССВ', min: 11.25, max: 33.75 },
+            { name: 'СВ', min: 33.75, max: 56.25 },
+            { name: 'ВСВ', min: 56.25, max: 78.75 },
+            { name: 'В', min: 78.75, max: 101.25 },
+            { name: 'ВЮВ', min: 101.25, max: 123.75 },
+            { name: 'ЮВ', min: 123.75, max: 146.25 },
+            { name: 'ЮЮВ', min: 146.25, max: 168.75 },
+            { name: 'Ю', min: 168.75, max: 191.25 },
+            { name: 'ЮЮЗ', min: 191.25, max: 213.75 },
+            { name: 'ЮЗ', min: 213.75, max: 236.25 },
+            { name: 'ЗЮЗ', min: 236.25, max: 258.75 },
+            { name: 'З', min: 258.75, max: 281.25 },
+            { name: 'ЗСЗ', min: 281.25, max: 303.75 },
+            { name: 'СЗ', min: 303.75, max: 326.25 },
+            { name: 'ССЗ', min: 326.25, max: 348.75 }
+        ];
+        let azAdjusted = az;
+        if (azAdjusted < 0) azAdjusted += 360;
+        for (const dir of directions) {
+            if (azAdjusted >= dir.min && azAdjusted < dir.max) return dir.name;
+        }
+        return 'С';
+    }
+    
+    function drawCompass(azimuth) {
+        ctx.clearRect(0, 0, size, size);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 5, 0, 2 * Math.PI);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary') || '#ffffff';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#e5e7eb';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        for (let deg = 0; deg < 360; deg += 10) {
+            const rad = deg * Math.PI / 180;
+            const isMajor = deg % 30 === 0;
+            const startLen = isMajor ? 8 : 4;
+            const x1 = centerX + (radius - startLen) * Math.cos(rad);
+            const y1 = centerY + (radius - startLen) * Math.sin(rad);
+            const x2 = centerX + radius * Math.cos(rad);
+            const y2 = centerY + radius * Math.sin(rad);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary') || '#6b7280';
+            ctx.lineWidth = isMajor ? 1.5 : 0.8;
+            ctx.stroke();
+        }
+        
+        const directions = [
+            { angle: 0, label: 'В', color: '#6b7280' },     // Север - вверх
+            { angle: 90, label: 'Ю', color: '#6b7280' },    // Восток - вправо
+            { angle: 180, label: 'З', color: '#6b7280' },   // Юг - вниз
+            { angle: 270, label: 'С', color: '#ef4444' }    // Запад - влево
+        ];
+        ctx.font = `bold 14px 'Inter', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const dir of directions) {
+            const rad = dir.angle * Math.PI / 180;
+            const x = centerX + (radius - 18) * Math.cos(rad);
+            const y = centerY + (radius - 18) * Math.sin(rad);
+            ctx.fillStyle = dir.color;
+            ctx.fillText(dir.label, x, y);
+        }
+        
+        if (azimuth !== null && azimuth !== '') {
+            const azNum = parseFloat(azimuth);
+            if (!isNaN(azNum)) {
+                const rad = (azNum - 90) * Math.PI / 180;
+                const arrowLength = radius - 12;
+                const arrowX = centerX + arrowLength * Math.cos(rad);
+                const arrowY = centerY + arrowLength * Math.sin(rad);
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(arrowX, arrowY);
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary') || '#6366f1';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                const backRad = (azNum - 90 - 140) * Math.PI / 180;
+                const sideLen = 12;
+                const leftX = arrowX + sideLen * Math.cos(backRad);
+                const leftY = arrowY + sideLen * Math.sin(backRad);
+                const rightRad = (azNum - 90 + 140) * Math.PI / 180;
+                const rightX = arrowX + sideLen * Math.cos(rightRad);
+                const rightY = arrowY + sideLen * Math.sin(rightRad);
+                ctx.beginPath();
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(leftX, leftY);
+                ctx.lineTo(rightX, rightY);
+                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary') || '#6366f1';
+                ctx.fill();
+            }
+        } else {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius - 20, 0, 2 * Math.PI);
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = `12px 'Inter', sans-serif`;
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af';
+            ctx.fillText('кликните', centerX, centerY);
+            ctx.fillText('чтобы выбрать', centerX, centerY + 18);
+        }
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary') || '#6366f1';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+    }
+    
+    function updateAzimuthDisplay(az) {
+    if (az !== null && !isNaN(az) && az !== '') {
+        const num = parseFloat(az);
+        azimuthValueSpan.textContent = Math.round(num);
+        azimuthDirectionSpan.textContent = `направление: ${getDirectionFromAzimuth(num)}`;
+        azimuthHidden.value = num;
+        currentAzimuth = num;
+        console.log('🎯 Азимут выбран:', num);  
+    } else {
+        azimuthValueSpan.textContent = '—';
+        azimuthDirectionSpan.textContent = 'не указано';
+        azimuthHidden.value = '';
+        currentAzimuth = null;
+        console.log('🎯 Азимут сброшен');  
+    }
+    drawCompass(currentAzimuth);
+}
+    
+    function getAngleFromClick(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const canvasX = (clientX - rect.left) * scaleX;
+        const canvasY = (clientY - rect.top) * scaleY;
+        const dx = canvasX - centerX;
+        const dy = canvasY - centerY;
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        angle = (angle + 90 + 360) % 360;
+        return angle;
+    }
+    
+    function onCanvasClick(e) {
+        const angle = getAngleFromClick(e.clientX, e.clientY);
+        updateAzimuthDisplay(angle);
+    }
+    
+    let isDraggingCompass = false;
+    function onCanvasMouseDown(e) {
+        isDraggingCompass = true;
+        const angle = getAngleFromClick(e.clientX, e.clientY);
+        updateAzimuthDisplay(angle);
+        e.preventDefault();
+    }
+    function onWindowMouseMove(e) {
+        if (isDraggingCompass) {
+            const angle = getAngleFromClick(e.clientX, e.clientY);
+            updateAzimuthDisplay(angle);
+        }
+    }
+    function onWindowMouseUp() { isDraggingCompass = false; }
+    function resetAzimuth() { updateAzimuthDisplay(null); }
+    
+    canvas.addEventListener('click', onCanvasClick);
+    canvas.addEventListener('mousedown', onCanvasMouseDown);
+    window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+    resetBtn.addEventListener('click', resetAzimuth);
+    
+    updateAzimuthDisplay(null);
+}
+
+
+
+
+
+
+
+function cancelUpload() {
+    resetUploadState();
+    hideAddPhotoModal();
+}
+
+function resetUploadState() {
+    selectedLocationForPhoto = null;
+    newShootingPoint = null;
+    newShootingAzimuth = null;
+}
+
+
+
+
 
 // Модальное окно для новой локации
 function showNewLocationModal(lat, lng) {
@@ -2965,60 +3540,6 @@ document.addEventListener('keydown', (e) => {
         closeNewLocationModal();
     }
 });
-
-function openUploadFormForLocation(locId, locName) {
-    locId = Number(locId);
-    if (isNaN(locId)) {
-        alert('Некорректный ID локации');
-        return;
-    }
-
-    const html = `
-        <h3>Загрузить фото для «${locName}»</h3>
-        <div class="form-group"><label>Год съёмки</label><input type="number" class="form-control" id="photoYear" required></div>
-        <div class="form-group"><label>Фотография</label><input type="file" class="form-control" id="photoImage" accept="image/*" required></div>
-        <div class="form-group"><label>Описание</label><textarea class="form-control" id="photoDesc" rows="3"></textarea></div>
-        <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="hideAddPhotoModal()">Отмена</button>
-            <button class="btn btn-primary" id="submitPhoto">Загрузить</button>
-        </div>
-    `;
-    showAddPhotoModal(html);
-    document.getElementById('submitPhoto').addEventListener('click', async () => {
-        const year = document.getElementById('photoYear').value;
-        const image = document.getElementById('photoImage').files[0];
-        const desc = document.getElementById('photoDesc').value;
-        if (!year || !image) {
-            alert('Заполните обязательные поля');
-            return;
-        }
-        const formData = new FormData();
-        formData.append('year', year);
-        formData.append('image', image);
-        formData.append('description', desc);
-        formData.append('location', locId);
-
-        try {
-            const resp = await fetch('/api/photos/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                body: formData
-            });
-            if (resp.ok) {
-                alert('Фото отправлено на модерацию!');
-                hideAddPhotoModal();
-                await loadAllPhotos();
-                renderPhotos();
-                await loadData();
-            } else {
-                const err = await resp.json();
-                alert('Ошибка: ' + JSON.stringify(err));
-            }
-        } catch (e) {
-            alert('Ошибка сети');
-        }
-    });
-}
 
     // Видимость кнопки
     function updateAddPhotoButton() {
@@ -3172,10 +3693,11 @@ function showAdjacentPhoto(direction) {
     currentDetailIndex = (currentDetailIndex + direction + currentDetailPhotos.length) % currentDetailPhotos.length;
     renderPhotoDetail();
 }
-
-
     checkAuth();
     loadData();
+
+    initMapModeToggle();
+    loadShootingPoints();
 
     window.addEventListener('resize', () => {
     // Ограничить ширину сайдбара при изменении размера окна

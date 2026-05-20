@@ -9,6 +9,9 @@ from .models import RetroPhoto
 from .serializers import RetroPhotoSerializer
 from .smart_matching import find_best_comparison_pair
 
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+
 
 PENDING_STATUS = 'На проверке'
 PUBLISHED_STATUS = 'Опубликовано'
@@ -109,3 +112,39 @@ class AdminRetroPhotoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+class ShootingPointsView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request):
+        published_status = get_or_create_status(PUBLISHED_STATUS)
+        photos = RetroPhoto.objects.filter(status=published_status).select_related('location')
+        
+        result = []
+        for photo in photos:
+            # Определяем координаты точки съёмки
+            if photo.shooting_point:
+                lat = photo.shooting_point.y
+                lon = photo.shooting_point.x
+            else:
+                lat = photo.location.coordinates.y
+                lon = photo.location.coordinates.x
+            
+            # Определяем азимут (сначала shooting_azimuth, потом azimuth)
+            azimuth_value = photo.shooting_azimuth if photo.shooting_azimuth is not None else photo.azimuth
+            
+            result.append({
+                'id': photo.id,
+                'image': photo.image.url,
+                'year': photo.year,
+                'azimuth': photo.azimuth,
+                'shooting_azimuth': azimuth_value,  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
+                'description': photo.description,
+                'location_name': photo.location.name,
+                'shooting_lat': lat,
+                'shooting_lon': lon,
+                'location_id': photo.location.id,
+                'owner_username': photo.owner.username,
+            })
+        
+        return Response(result)
