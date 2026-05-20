@@ -584,6 +584,7 @@
         .compare-container img {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             object-fit: contain; user-select: none;
+            opacity: 1; transition: opacity 0.2s ease;
         }
         .compare-before { clip-path: inset(0 50% 0 0); z-index: 2; }
         .compare-slider {
@@ -1914,85 +1915,126 @@ async function openProfileModal() {
         }
     });
 
-    // --- СЛАЙДЕР СРАВНЕНИЯ (без изменений) ---
-    const compareOverlay = document.getElementById('compareOverlay');
-    const compareContainer = document.getElementById('compareContainer');
-    const compareImgOld = document.getElementById('compareImgOld');
-    const compareImgNew = document.getElementById('compareImgNew');
-    const compareSlider = document.getElementById('compareSlider');
-    const compareYearOld = document.getElementById('compareYearOld');
-    const compareYearNew = document.getElementById('compareYearNew');
-    const compareAiInfo = document.getElementById('compareAiInfo');
-    let isDragging = false;
+    // --- СЛАЙДЕР СРАВНЕНИЯ ---
+const compareOverlay = document.getElementById('compareOverlay');
+const compareContainer = document.getElementById('compareContainer');
+const compareImgOld = document.getElementById('compareImgOld');
+const compareImgNew = document.getElementById('compareImgNew');
+const compareSlider = document.getElementById('compareSlider');
+const compareYearOld = document.getElementById('compareYearOld');
+const compareYearNew = document.getElementById('compareYearNew');
+const compareAiInfo = document.getElementById('compareAiInfo');
+let isCompareDragging = false;  // Переименовано, чтобы не конфликтовать
 
-    async function openCompare(locId, locName) {
-        const photos = photosDataCache[locId];
-        if (!photos || photos.length < 2) return;
+async function openCompare(locId, locName) {
+    const photos = photosDataCache[locId];
+    if (!photos || photos.length < 2) return;
 
-        compareOverlay.style.display = 'flex';
-        compareAiInfo.textContent = 'Smart photo matching is analyzing all candidate pairs...';
-        resetCompareSlider();
+ // Скрываем изображения до загрузки новых данных
+    compareImgOld.style.opacity = '0';
+    compareImgNew.style.opacity = '0';   
+    compareAiInfo.textContent = 'Анализ всех пар фотографий...';
+    resetCompareSlider();
 
-        try {
-            const response = await fetch(`/api/photos/smart-compare/?location=${locId}`);
-            if (!response.ok) throw new Error('Smart compare API error');
-            const match = await response.json();
-            showComparePair(match.old_photo, match.new_photo, match);
-        } catch (error) {
-            console.warn('Smart compare fallback:', error);
-            const sorted = [...photos].sort((a, b) => a.year - b.year);
-            showComparePair(sorted[0], sorted[sorted.length - 1], null);
-        }
+    compareOverlay.style.display = 'flex';
+
+    try {
+        const response = await fetch(`/api/photos/smart-compare/?location=${locId}`);
+        if (!response.ok) throw new Error('Smart compare API error');
+        const match = await response.json();
+        showComparePair(match.old_photo, match.new_photo, match);
+    } catch (error) {
+        console.warn('Smart compare fallback:', error);
+        const sorted = [...photos].sort((a, b) => a.year - b.year);
+        showComparePair(sorted[0], sorted[sorted.length - 1], null);
     }
+}
 
-    function showComparePair(oldPhoto, newPhoto, match) {
-        compareImgOld.src = oldPhoto.image;
-        compareImgNew.src = newPhoto.image;
-        compareYearOld.textContent = oldPhoto.year;
-        compareYearNew.textContent = newPhoto.year;
-        resetCompareSlider();
+function showComparePair(oldPhoto, newPhoto, match) {
+    compareImgOld.src = oldPhoto.image;
+    compareImgNew.src = newPhoto.image;
+    compareYearOld.textContent = oldPhoto.year;
+    compareYearNew.textContent = newPhoto.year;
 
-        if (match) {
-            const metrics = match.metrics || {};
-            compareAiInfo.innerHTML = `
-                <span class="compare-ai-score">AI score: ${match.score}%</span>
-                · analyzed pairs: ${metrics.candidates_analyzed || 0}
-                · visual similarity: ${metrics.visual_similarity || 0}%
-                · azimuth: ${metrics.azimuth_score || 0}%
-            `;
-        } else {
-            compareAiInfo.textContent = 'Fallback chronological pair is shown because server-side analysis is unavailable.';
-        }
+    // Ждём загрузки изображений перед показом
+    Promise.all([
+        compareImgOld.decode().catch(() => {}),
+        compareImgNew.decode().catch(() => {})
+    ]).then(() => {
+        compareImgOld.style.opacity = '1';
+        compareImgNew.style.opacity = '1';
+    });
+
+    resetCompareSlider();
+
+    if (match) {
+        const metrics = match.metrics || {};
+        compareAiInfo.innerHTML = `
+            <span class="compare-ai-score">AI точность: ${match.score}%</span>
+            · проанализировано пар: ${metrics.candidates_analyzed || 0}
+            · визуальное сходство: ${metrics.visual_similarity || 0}%
+            · азимут: ${metrics.azimuth_score || 0}%
+        `;
+    } else {
+        compareAiInfo.textContent = 'Показана хронологическая пара (AI анализ недоступен).';
     }
+}
 
-    function resetCompareSlider() {
-        compareImgOld.style.clipPath = 'inset(0 calc(100% - 50%) 0 0)';
-        compareImgNew.style.clipPath = 'inset(0 0 0 50%)';
-        compareSlider.style.left = '50%';
-    }
-    function closeCompare() { compareOverlay.style.display = 'none'; }
-    document.getElementById('compareClose').addEventListener('click', closeCompare);
-    compareOverlay.addEventListener('click', function(e) { if (e.target === compareOverlay) closeCompare(); });
+function resetCompareSlider() {
+    compareImgOld.style.clipPath = 'inset(0 calc(100% - 50%) 0 0)';
+    compareImgNew.style.clipPath = 'inset(0 0 0 50%)';
+    compareSlider.style.left = '50%';
+}
 
-    function startDrag(e) { isDragging = true; e.preventDefault(); }
-    function stopDrag() { isDragging = false; }
-    function dragSlider(e) {
-        if (!isDragging) return;
-        const rect = compareContainer.getBoundingClientRect();
-        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        let x = clientX - rect.left;
-        x = Math.max(0, Math.min(x, rect.width));
-        const percent = (x / rect.width) * 100;
-        compareImgOld.style.clipPath = `inset(0 calc(100% - ${percent}%) 0 0)`;
-        compareImgNew.style.clipPath = `inset(0 0 0 ${percent}%)`;
-        compareSlider.style.left = percent + '%';
+function closeCompare() { 
+    compareOverlay.style.display = 'none'; 
+}
+
+document.getElementById('compareClose').addEventListener('click', closeCompare);
+compareOverlay.addEventListener('click', function(e) { 
+    if (e.target === compareOverlay) closeCompare(); 
+});
+
+// ИСПРАВЛЕННЫЕ ОБРАБОТЧИКИ ДЛЯ СЛАЙДЕРА СРАВНЕНИЯ
+function startCompareDrag(e) {
+    isCompareDragging = true;
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+function stopCompareDrag() {
+    isCompareDragging = false;
+}
+
+function dragCompareSlider(e) {
+    if (!isCompareDragging) return;
+    e.preventDefault();
+    
+    const rect = compareContainer.getBoundingClientRect();
+    let clientX;
+    
+    if (e.touches) {
+        clientX = e.touches[0].clientX;
+    } else {
+        clientX = e.clientX;
     }
-    compareSlider.addEventListener('mousedown', startDrag);
-    window.addEventListener('mousemove', dragSlider);
-    window.addEventListener('mouseup', stopDrag);
-    compareSlider.addEventListener('touchstart', startDrag);
-    window.addEventListener('touchmove', dragSlider);
-    window.addEventListener('touchend', stopDrag);
+    
+    let x = clientX - rect.left;
+    x = Math.max(0, Math.min(x, rect.width));
+    const percent = (x / rect.width) * 100;
+    
+    compareImgOld.style.clipPath = `inset(0 calc(100% - ${percent}%) 0 0)`;
+    compareImgNew.style.clipPath = `inset(0 0 0 ${percent}%)`;
+    compareSlider.style.left = percent + '%';
+}
+
+// Добавляем новые
+compareSlider.addEventListener('mousedown', startCompareDrag);
+compareSlider.addEventListener('touchstart', startCompareDrag, { passive: false });
+window.addEventListener('mousemove', dragCompareSlider);
+window.addEventListener('mouseup', stopCompareDrag);
+window.addEventListener('touchmove', dragCompareSlider, { passive: false });
+window.addEventListener('touchend', stopCompareDrag);
 
     // ===== Боковая панель и поиск по локациям =====
     const sidebar = document.getElementById('sidebar');
